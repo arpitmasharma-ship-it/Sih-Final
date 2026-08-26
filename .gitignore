@@ -1,0 +1,14 @@
+node_modules/
+dist/
+build/
+coverage/
+.env
+.env.local
+*.log
+.DS_Store
+server/uploads/*
+!server/uploads/.gitkeep
+.vscode/
+.idea/
+__pycache__/
+ocr-service/__pycache__/

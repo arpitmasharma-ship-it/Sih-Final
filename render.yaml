@@ -1,0 +1,45 @@
+# Render.com blueprint — backend web service (MongoDB via Atlas)
+services:
+  - type: web
+    name: lmcc-server
+    runtime: node
+    rootDir: server
+    plan: free
+    buildCommand: npm install
+    startCommand: node server.js
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 5000
+      - key: MONGODB_URI
+        sync: false            # set in dashboard: mongodb+srv://...
+      - key: JWT_SECRET
+        generateValue: true
+      - key: JWT_EXPIRES_IN
+        value: 8h
+      - key: CLIENT_URL
+        sync: false            # e.g. https://lmcc-client.vercel.app
+      - key: COOKIE_SAMESITE
+        value: none
+      - key: COOKIE_SECURE
+        value: true
+      - key: OCR_PROVIDER
+        value: tesseract
+      # Cloudinary optional; leave blank to fall back to local disk storage
+      - key: CLOUDINARY_CLOUD_NAME
+        sync: false
+      - key: CLOUDINARY_API_KEY
+        sync: false
+      - key: CLOUDINARY_API_SECRET
+        sync: false
+
+  - type: web
+    name: lmcc-ocr-service
+    runtime: python
+    rootDir: ocr-service
+    plan: starter
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
