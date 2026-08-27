@@ -1,25 +1,73 @@
-export default function StatCard({ icon: Icon, label, value, tone = 'blue', sub, loading }) {
+export default function StatCard({ icon: Icon, label, value, tone = 'blue', sub, loading, trend }) {
   const tones = {
-    blue: 'bg-primary-50 text-primary-700 dark:bg-primary-900/40 dark:text-primary-300',
-    green: 'bg-emerald-50 text-emerald-600 dark:bg-emerald-900/40 dark:text-emerald-300',
-    red: 'bg-red-50 text-red-600 dark:bg-red-900/40 dark:text-red-300',
-    amber: 'bg-amber-50 text-amber-600 dark:bg-amber-900/40 dark:text-amber-300',
-    slate: 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300',
+    blue: {
+      border: 'border-slate-200 dark:border-slate-800',
+      icon: 'bg-primary-50 dark:bg-primary-950 text-primary-700 dark:text-primary-300 border border-primary-100 dark:border-primary-800',
+      accent: 'text-primary-700 dark:text-primary-300',
+    },
+    green: {
+      border: 'border-slate-200 dark:border-slate-800',
+      icon: 'bg-emerald-50 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 border border-emerald-100 dark:border-emerald-800',
+      accent: 'text-emerald-700 dark:text-emerald-300',
+    },
+    red: {
+      border: 'border-slate-200 dark:border-slate-800',
+      icon: 'bg-red-50 dark:bg-red-950 text-red-700 dark:text-red-300 border border-red-100 dark:border-red-800',
+      accent: 'text-red-700 dark:text-red-300',
+    },
+    amber: {
+      border: 'border-slate-200 dark:border-slate-800',
+      icon: 'bg-amber-50 dark:bg-amber-950 text-amber-700 dark:text-amber-300 border border-amber-100 dark:border-amber-800',
+      accent: 'text-amber-700 dark:text-amber-300',
+    },
+    purple: {
+      border: 'border-slate-200 dark:border-slate-800',
+      icon: 'bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 border border-indigo-100 dark:border-indigo-800',
+      accent: 'text-indigo-700 dark:text-indigo-300',
+    },
+    slate: {
+      border: 'border-slate-200 dark:border-slate-800',
+      icon: 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700',
+      accent: 'text-slate-700 dark:text-slate-300',
+    },
   };
+
+  const style = tones[tone] || tones.blue;
+
   return (
-    <div className="card flex items-center gap-4 p-4" data-testid="stat-card">
-      <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${tones[tone]}`}>
-        {Icon && <Icon size={21} />}
+    <div
+      className={`relative rounded-xl border ${style.border} bg-white dark:bg-slate-900 p-5 shadow-xs transition hover:border-slate-300 dark:hover:border-slate-700`}
+      data-testid="stat-card"
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <div className="truncate text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+            {label}
+          </div>
+          {loading ? (
+            <div className="my-1.5 h-8 w-20 animate-pulse rounded bg-slate-200 dark:bg-slate-800" />
+          ) : (
+            <div className="my-1 text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
+              {value ?? '0'}
+            </div>
+          )}
+          {sub && (
+            <div className="truncate text-xs text-slate-500 dark:text-slate-400">
+              {sub}
+            </div>
+          )}
+        </div>
+
+        <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-lg ${style.icon}`}>
+          {Icon && <Icon size={20} />}
+        </div>
       </div>
-      <div className="min-w-0">
-        {loading ? (
-          <div className="h-7 w-14 animate-pulse rounded bg-slate-200 dark:bg-slate-700" />
-        ) : (
-          <div className="text-xl font-extrabold leading-tight text-slate-900 dark:text-white">{value ?? '—'}</div>
-        )}
-        <div className="truncate text-xs font-medium text-slate-500 dark:text-slate-400">{label}</div>
-        {sub && <div className="truncate text-[11px] text-slate-400">{sub}</div>}
-      </div>
+
+      {trend && (
+        <div className="mt-3 border-t border-slate-100 dark:border-slate-800 pt-2 text-xs font-medium text-emerald-600 dark:text-emerald-400">
+          <span>{trend}</span>
+        </div>
+      )}
     </div>
   );
 }
