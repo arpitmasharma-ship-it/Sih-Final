@@ -36,14 +36,19 @@ async function uploadImage(buffer, { folder = 'lmcc', filename = 'image.png' } =
     }
   }
 
-  // Local fallback
+  // Local disk + Data URI fallback (guarantees cross-origin visibility even on ephemeral hosts)
   const ext = path.extname(filename) || '.png';
   const name = `${Date.now()}-${crypto.randomBytes(6).toString('hex')}${ext}`;
   const dir = ensureUploadDir();
   const filePath = path.join(dir, name);
   await fs.promises.writeFile(filePath, buffer);
   const relUrl = `/uploads/${path.relative(UPLOAD_ROOT, filePath).split(path.sep).join('/')}`;
-  return { url: relUrl, publicId: null, provider: 'local' };
+
+  const mime = ext.toLowerCase() === '.png' ? 'image/png' : ext.toLowerCase() === '.webp' ? 'image/webp' : 'image/jpeg';
+  // If buffer is under 1.8MB, use inline data URL so it displays anywhere without cross-host 404s
+  const finalUrl = buffer.length <= 1800000 ? `data:${mime};base64,${buffer.toString('base64')}` : relUrl;
+
+  return { url: finalUrl, publicId: null, provider: 'local' };
 }
 
 async function deleteAsset(publicId) {

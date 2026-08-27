@@ -13,6 +13,10 @@ const BRAND = {
 async function loadImageBuffer(url) {
   try {
     if (!url) return null;
+    if (url.startsWith('data:image/')) {
+      const base64Data = url.replace(/^data:image\/\w+;base64,/, '');
+      return Buffer.from(base64Data, 'base64');
+    }
     // Prefer reading local files directly from disk without network overhead
     if (url.startsWith('/uploads') || url.includes('uploads/')) {
       const rel = url.replace(/^.*uploads\//, '');

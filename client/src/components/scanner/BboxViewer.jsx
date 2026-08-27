@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ScanEye } from 'lucide-react';
+import { ScanEye, ImageOff } from 'lucide-react';
 import { buildAssetUrl } from '../../services/api';
 import { FIELD_LABEL } from '../../constants';
 
@@ -9,12 +9,27 @@ import { FIELD_LABEL } from '../../constants';
  */
 export default function BboxViewer({ url, alt, fields = [], imageIndex = 0 }) {
   const [showBoxes, setShowBoxes] = useState(false);
+  const [hasError, setHasError] = useState(false);
   const mine = fields.filter((f) => f.bbox && (f.sourceImageIndex ?? 0) === imageIndex);
+  const assetUrl = buildAssetUrl(url);
 
   return (
-    <figure className="group relative overflow-hidden rounded-xl border border-slate-200 dark:border-slate-800">
-      <img src={buildAssetUrl(url)} alt={alt} className="w-full object-contain" />
-      {mine.length > 0 && (
+    <figure className="group relative overflow-hidden rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50">
+      {hasError || !assetUrl ? (
+        <div className="flex flex-col items-center justify-center p-8 text-center text-slate-400 min-h-[160px]">
+          <ImageOff size={28} className="mb-2 opacity-60" />
+          <p className="text-xs font-semibold">Image unavailable</p>
+          <p className="text-[10px] text-slate-400 mt-0.5">Scanned on local instance or expired</p>
+        </div>
+      ) : (
+        <img
+          src={assetUrl}
+          alt={alt}
+          onError={() => setHasError(true)}
+          className="w-full object-contain max-h-[420px] bg-slate-950/5"
+        />
+      )}
+      {!hasError && mine.length > 0 && (
         <>
           {showBoxes && (
             <div className="absolute inset-0">
