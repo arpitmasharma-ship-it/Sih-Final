@@ -32,7 +32,7 @@ export default function Login() {
     const creds = {
       ADMIN: ['Arpita@gmail.com', 'Arpita123'],
       INSPECTOR: ['Arpiti@gmail.com', 'Arpiti123'],
-      ANALYST: ['analyst@lmcc.gov.in', 'Anal@1234'],
+      ANALYST: ['Arpitaa@gmail.com', 'Arpita1234'],
     }[role];
     setValue('email', creds[0], { shouldValidate: true });
     setValue('password', creds[1], { shouldValidate: true });

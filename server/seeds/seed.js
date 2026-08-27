@@ -44,8 +44,8 @@ const SEED_USERS = [
   },
   {
     name: 'Compliance Analyst',
-    email: 'analyst@lmcc.gov.in',
-    password: 'Anal@1234',
+    email: 'arpitaa@gmail.com',
+    password: 'Arpita1234',
     role: 'ANALYST',
     department: 'Legal Metrology Intelligence',
     state: 'Delhi',
@@ -97,9 +97,9 @@ async function main() {
   logger.info('');
   logger.info('=== Seed complete ===');
   logger.info('Default logins:');
-  logger.info('  Admin:     Arpita@gmail.com / Arpita123');
-  logger.info('  Inspector: Arpiti@gmail.com / Arpiti123');
-  logger.info('  Analyst:   analyst@lmcc.gov.in   / Anal@1234');
+  logger.info('  Admin:     Arpita@gmail.com  / Arpita123');
+  logger.info('  Inspector: Arpiti@gmail.com  / Arpiti123');
+  logger.info('  Analyst:   Arpitaa@gmail.com / Arpita1234');
   logger.info('');
   logger.info('Next steps:');
   logger.info('  1. Log in as admin');
