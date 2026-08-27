@@ -13,7 +13,7 @@ export default function Login() {
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const [submitting, setSubmitting] = useState(false);
-  const { register, handleSubmit, setValue, formState } = useForm();
+  const { register, handleSubmit, formState } = useForm();
   const error = useSelector((s) => s.auth.error);
 
   const onSubmit = async (data) => {
@@ -26,16 +26,6 @@ export default function Login() {
     } finally {
       setSubmitting(false);
     }
-  };
-
-  const fillDemo = (role) => {
-    const creds = {
-      ADMIN: ['Arpita@gmail.com', 'Arpita123'],
-      INSPECTOR: ['Arpiti@gmail.com', 'Arpiti123'],
-      ANALYST: ['Arpitaa@gmail.com', 'Arpita1234'],
-    }[role];
-    setValue('email', creds[0], { shouldValidate: true });
-    setValue('password', creds[1], { shouldValidate: true });
   };
 
   return (
@@ -64,22 +54,6 @@ export default function Login() {
 
       <div className="mt-5 text-center text-sm text-slate-500">
         Contact your administrator to create an account.
-      </div>
-
-      <div className="mt-8 rounded-xl border border-dashed border-slate-300 p-4 dark:border-slate-700">
-        <p className="mb-2 text-xs font-bold uppercase tracking-wider text-slate-400">Demo credentials</p>
-        <div className="flex flex-wrap gap-2">
-          {['ADMIN', 'INSPECTOR', 'ANALYST'].map((r) => (
-            <button
-              key={r}
-              type="button"
-              onClick={() => fillDemo(r)}
-              className="rounded-lg bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
-            >
-              Use {r}
-            </button>
-          ))}
-        </div>
       </div>
     </AuthLayout>
   );
