@@ -12,4 +12,8 @@ function initCloudinary() {
   return true;
 }
 
+if (config.cloudinary.enabled) {
+  initCloudinary();
+}
+
 module.exports = { cloudinary, initCloudinary };

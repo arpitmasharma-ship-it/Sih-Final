@@ -20,16 +20,20 @@ function ensureUploadDir() {
  */
 async function uploadImage(buffer, { folder = 'lmcc', filename = 'image.png' } = {}) {
   if (config.cloudinary.enabled) {
-    return new Promise((resolve, reject) => {
-      const stream = cloudinary.uploader.upload_stream(
-        { folder, resource_type: 'image' },
-        (err, result) => {
-          if (err) return reject(err);
-          resolve({ url: result.secure_url, publicId: result.public_id, provider: 'cloudinary' });
-        }
-      );
-      stream.end(buffer);
-    });
+    try {
+      return await new Promise((resolve, reject) => {
+        const stream = cloudinary.uploader.upload_stream(
+          { folder, resource_type: 'image' },
+          (err, result) => {
+            if (err) return reject(err);
+            resolve({ url: result.secure_url, publicId: result.public_id, provider: 'cloudinary' });
+          }
+        );
+        stream.end(buffer);
+      });
+    } catch (err) {
+      console.warn('[STORAGE] Cloudinary upload failed, falling back to local disk storage:', err.message);
+    }
   }
 
   // Local fallback

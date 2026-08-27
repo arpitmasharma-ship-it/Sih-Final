@@ -8,6 +8,9 @@ const config = require('../config/env');
 const { recordAudit, ACTIONS } = require('../services/audit.service');
 
 exports.create = asyncHandler(async (req, res) => {
+  if (!req.body.inspectionId) {
+    throw ApiError.badRequest('`inspectionId` is required in the request body');
+  }
   const { report, regenerated } = await reportService.createReport({
     inspectionId: req.body.inspectionId,
     user: req.user,
@@ -35,11 +38,40 @@ exports.getOne = asyncHandler(async (req, res) => {
 });
 
 exports.getPdf = asyncHandler(async (req, res) => {
-  const report = await reportService.getReport(req.params.id);
-  if (report.storageProvider === 'local' && report.fileUrl?.startsWith('/uploads')) {
+  let report;
+  try {
+    report = await reportService.getReport(req.params.id);
+  } catch (err) {
+    // If not found as report ID, try creating a report for the inspection
+    const createdRes = await reportService.createReport({
+      inspectionId: req.params.id,
+      user: req.user,
+    });
+    report = createdRes.report;
+  }
+
+  if (report.fileUrl?.startsWith('/uploads')) {
     const filePath = path.join(__dirname, '..', '..', report.fileUrl.replace(/^\//, ''));
-    if (!fs.existsSync(filePath)) throw ApiError.notFound('Report file missing on server');
-    return res.download(filePath, `LMCC-${report.reportId}.pdf`);
+    if (!fs.existsSync(filePath)) {
+      const Inspection = require('../models/Inspection');
+      const inspection = await Inspection.findById(report.inspectionId?._id || report.inspectionId)
+        .populate('productId')
+        .populate('inspectorId', 'name email')
+        .lean();
+      if (inspection) {
+        const { generateInspectionPdf } = require('../services/reports/pdf.service');
+        const { buffer } = await generateInspectionPdf({
+          inspection,
+          product: inspection.productId,
+          generatedBy: req.user,
+        });
+        fs.mkdirSync(path.dirname(filePath), { recursive: true });
+        fs.writeFileSync(filePath, buffer);
+      }
+    }
+    if (fs.existsSync(filePath)) {
+      return res.download(filePath, `LMCC-${report.reportId}.pdf`);
+    }
   }
   if (/^https?:\/\//.test(report.fileUrl)) return res.redirect(report.fileUrl);
   throw ApiError.notFound('Report file unavailable');

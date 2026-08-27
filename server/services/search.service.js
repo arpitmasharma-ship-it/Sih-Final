@@ -1,15 +1,16 @@
 const Product = require('../models/Product');
 const Inspection = require('../models/Inspection');
 const ComplianceRule = require('../models/ComplianceRule');
+const Report = require('../models/Report');
 const User = require('../models/User');
 const { escapeRegex } = require('../utils/db');
 
 /**
- * Global search across products, inspections, rules (and users for ADMIN).
+ * Global search across products, inspections, reports, and rules.
  */
 async function globalSearch({ q, status, severity, category, district, from, to, limit = 10 }) {
-  const rx = q ? new RegExp(escapeRegex(q), 'i') : null;
-  const out = { products: [], inspections: [], rules: [] };
+  const rx = q ? new RegExp(escapeRegex(q.trim()), 'i') : null;
+  const out = { products: [], inspections: [], reports: [], rules: [] };
   const filterInspection = {};
 
   if (status) filterInspection.finalStatus = status;
@@ -31,73 +32,104 @@ async function globalSearch({ q, status, severity, category, district, from, to,
   if (category) productFilter.category = category;
 
   if (!q && !Object.keys(filterInspection).length && !Object.keys(productFilter).length) {
-    return out; // avoid full-table scans when nothing is queried
+    return out;
   }
 
-  const [products, inspections, rules] = await Promise.all([
-    Product.find(
-      rx
-        ? {
-            ...productFilter,
-            $or: [
-              { productName: rx },
-              { manufacturer: rx },
-              { brandName: rx },
-              { barcode: rx },
-              { importer: rx },
-              { packer: rx },
-            ],
-          }
-        : productFilter
-    )
-      .limit(limit)
-      .select('productName manufacturer complianceStatus complianceScore images category location updatedAt')
-      .lean(),
+  // 1. Search products
+  const productQuery = rx
+    ? {
+        ...productFilter,
+        $or: [
+          { productName: rx },
+          { manufacturer: rx },
+          { brandName: rx },
+          { category: rx },
+          { barcode: rx },
+          { importer: rx },
+          { packer: rx },
+          { 'location.city': rx },
+          { 'location.district': rx },
+          { 'location.state': rx },
+          { 'location.addressLabel': rx },
+        ],
+      }
+    : productFilter;
 
+  const products = await Product.find(productQuery)
+    .limit(limit)
+    .select('productName manufacturer brandName complianceStatus complianceScore images category location updatedAt')
+    .lean();
+
+  const matchingProductIds = products.map((p) => p._id);
+
+  // 2. Search inspections (by ID, notes, rule code/title, location, or matching product ID)
+  const inspectionOrConditions = [];
+  if (rx) {
+    inspectionOrConditions.push(
+      { inspectionId: rx },
+      { 'violations.ruleCode': rx },
+      { 'violations.ruleTitle': rx },
+      { inspectorNotes: rx },
+      { 'location.district': rx },
+      { 'location.state': rx },
+      { 'location.city': rx },
+      { 'location.addressLabel': rx }
+    );
+    if (matchingProductIds.length > 0) {
+      inspectionOrConditions.push({ productId: { $in: matchingProductIds } });
+    }
+  }
+
+  const [inspections, reports, rules] = await Promise.all([
     Inspection.find({
       ...filterInspection,
-      ...(rx
-        ? {
-            $or: [
-              { inspectionId: rx },
-              { 'violations.ruleCode': rx },
-              { inspectorNotes: rx },
-            ],
-          }
-        : {}),
+      ...(inspectionOrConditions.length > 0 ? { $or: inspectionOrConditions } : {}),
     })
       .limit(limit)
       .sort(rx ? {} : { createdAt: -1 })
       .select('inspectionId finalStatus scores violations createdAt productId location')
-      .populate('productId', 'productName images')
+      .populate('productId', 'productName brandName images category')
+      .lean(),
+
+    Report.find(
+      rx
+        ? {
+            $or: [
+              { reportId: rx },
+              { 'snapshot.productName': rx },
+              { 'snapshot.category': rx },
+              ...(matchingProductIds.length > 0 ? [{ productId: { $in: matchingProductIds } }] : []),
+            ],
+          }
+        : {}
+    )
+      .limit(limit)
+      .sort({ createdAt: -1 })
+      .populate('inspectionId', 'inspectionId finalStatus')
+      .populate('generatedBy', 'name')
       .lean(),
 
     ComplianceRule.find(
-      rx ? { $or: [{ ruleCode: rx }, { title: rx }, { description: rx }] } : {}
+      rx
+        ? {
+            $or: [
+              { ruleCode: rx },
+              { title: rx },
+              { description: rx },
+              { category: rx },
+              { 'metadata.penaltySection': rx },
+            ],
+          }
+        : {}
     )
-      .limit(6)
-      .select('ruleCode title category enabled version sourceReference')
+      .limit(8)
+      .select('ruleCode title category enabled version sourceReference severity')
       .lean(),
   ]);
 
-  // MRP search support (stored inside extractedDeclarations map)
-  let mrpMatches = [];
-  if (rx && /mrp|rs|₹|price/i.test(q)) {
-    mrpMatches = await Product.find({
-      ...productFilter,
-      [`extractedDeclarations.MRP.value`]: rx,
-    })
-      .limit(limit)
-      .select('productName manufacturer complianceStatus complianceScore images category')
-      .lean();
-  }
-  const seen = new Set(products.map((p) => String(p._id)));
-  mrpMatches.forEach((m) => {
-    if (!seen.has(String(m._id))) products.push(m);
-  });
-
   out.products = products;
   out.inspections = inspections;
+  out.reports = reports;
   out.rules = rules;
   return out;
 }

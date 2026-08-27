@@ -4,7 +4,7 @@ import { useSelector } from 'react-redux';
 import { toast } from 'react-toastify';
 import {
   ArrowLeft, FileText, MapPin, User, CheckCircle2, XCircle,
-  Eye, ClipboardCheck,
+  Eye, ClipboardCheck, Download,
 } from 'lucide-react';
 import api from '../../services/api';
 import PageHeader from '../../components/ui/PageHeader';
@@ -17,6 +17,7 @@ import BboxViewer from '../../components/scanner/BboxViewer';
 import FieldEditorList from '../../components/scanner/FieldEditorList';
 import { Spinner, EmptyState } from '../../components/ui/Feedback';
 import { fmtDateTime, toastError } from '../../utils/format';
+import { downloadReportPdf } from '../../utils/download';
 
 export default function InspectionDetails({ mode }) {
   const { id } = useParams();
@@ -31,6 +32,7 @@ export default function InspectionDetails({ mode }) {
   const [remarks, setRemarks] = useState('');
   const [decision, setDecision] = useState('');
   const [submittingReview, setSubmittingReview] = useState(false);
+  const [downloading, setDownloading] = useState(false);
 
   const load = async () => {
     try {
@@ -57,13 +59,33 @@ export default function InspectionDetails({ mode }) {
   const generateReport = async () => {
     setGenerating(true);
     try {
-      await api.post('/reports', { inspectionId: inspection._id });
-      toast.success('Report ready');
+      const res = await api.post('/reports', { inspectionId: inspection._id });
+      toast.success('Report generated successfully');
+      const rep = res.data.data?.report;
+      const targetId = rep?._id || rep?.reportId || inspection._id;
+      const targetRef = rep?.reportId || inspection.inspectionId;
+      try {
+        await downloadReportPdf(targetId, `LMCC-${targetRef}`);
+        toast.success('PDF download started');
+      } catch {}
       await load();
     } catch (e) {
       toastError(e);
     } finally {
       setGenerating(false);
+    }
+  };
+
+  const downloadPdf = async () => {
+    setDownloading(true);
+    try {
+      const targetId = inspection.reportId || inspection._id;
+      await downloadReportPdf(targetId, `LMCC-${inspection.inspectionId}`);
+      toast.success('PDF download started');
+    } catch (e) {
+      toastError(e);
+    } finally {
+      setDownloading(false);
     }
   };
 
@@ -94,14 +116,12 @@ export default function InspectionDetails({ mode }) {
         right={
           <div className="flex items-center gap-2">
             <Badge status={inspection.finalStatus} />
-            {!inspection.reportId && (
-              <Button size="sm" variant="secondary" icon={FileText} loading={generating} onClick={generateReport}>
-                Generate report
-              </Button>
-            )}
+            <Button size="sm" variant="secondary" icon={Download} loading={downloading || generating} onClick={inspection.reportId ? downloadPdf : generateReport}>
+              {inspection.reportId ? 'Download PDF' : 'Generate & Download PDF'}
+            </Button>
             {inspection.reportId && (
               <Link to="/reports">
-                <Button size="sm" variant="secondary" icon={Eye}>View report</Button>
+                <Button size="sm" variant="secondary" icon={Eye}>Reports</Button>
               </Link>
             )}
             {canReview && !inspection.reviewed && (

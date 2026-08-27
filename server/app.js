@@ -24,7 +24,12 @@ function createApp() {
     cors({
       origin: (origin, cb) => {
         // allow server-to-server/no-origin (curl, mobile webview) plus configured origins
-        if (!origin || config.clientOrigins.includes(origin)) return cb(null, true);
+        if (!origin) return cb(null, true);
+        if (config.clientOrigins.includes(origin)) return cb(null, true);
+        // Allow all vercel preview/production subdomains
+        if (origin.endsWith('.vercel.app') || origin.endsWith('.onrender.com')) {
+          return cb(null, true);
+        }
         return cb(null, false);
       },
       credentials: true,

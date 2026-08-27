@@ -10,12 +10,17 @@ let workerPromise = null;
 async function getWorker(onProgress) {
   if (!workerPromise) {
     workerPromise = (async () => {
-      const worker = await createWorker('eng', 1, {
-        logger: (m) => {
-          if (m.status === 'recognizing text' && onProgress) onProgress(m.progress);
-        },
-      });
-      return worker;
+      try {
+        const worker = await createWorker('eng', 1, {
+          logger: (m) => {
+            if (m.status === 'recognizing text' && onProgress) onProgress(m.progress);
+          },
+        });
+        return worker;
+      } catch (err) {
+        workerPromise = null;
+        throw err;
+      }
     })();
   }
   return workerPromise;

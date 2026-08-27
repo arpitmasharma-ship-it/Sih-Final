@@ -53,6 +53,13 @@ export default function Topbar() {
 
       <div className="ml-auto flex items-center gap-1">
         <button
+          onClick={() => navigate('/search')}
+          className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800 sm:hidden"
+          title="Search"
+        >
+          <Search size={18} />
+        </button>
+        <button
           onClick={() => dispatch(toggleTheme())}
           className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
           title="Toggle theme"

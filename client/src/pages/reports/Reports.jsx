@@ -12,6 +12,7 @@ import DataTable, { Pagination } from '../../components/ui/DataTable';
 import { TableSkeleton, EmptyState } from '../../components/ui/Feedback';
 import Modal from '../../components/ui/Modal';
 import { fmtDateTime } from '../../utils/format';
+import { downloadReportPdf, exportReportJson } from '../../utils/download';
 
 export default function Reports() {
   const [params, setParams] = useSearchParams();
@@ -23,21 +24,33 @@ export default function Reports() {
   const [generating, setGenerating] = useState(false);
   const [checksumOf, setChecksumOf] = useState(null); // report row for checksum modal
 
+  const [recentInspections, setRecentInspections] = useState([]);
+
+  const fetchReports = async () => {
+    setLoading(true);
+    try {
+      const res = await api.get('/reports', {
+        params: { q: q || undefined, page: params.get('page') || 1, limit: 12 },
+      });
+      setData({ items: Array.isArray(res.data.data) ? res.data.data : [], pagination: res.data.pagination || null });
+    } catch {
+      setData({ items: [], pagination: null });
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    (async () => {
-      setLoading(true);
-      try {
-        const res = await api.get('/reports', {
-          params: { q: q || undefined, page: params.get('page') || 1, limit: 12 },
-        });
-        setData({ items: Array.isArray(res.data.data) ? res.data.data : [], pagination: res.data.pagination || null });
-      } catch {
-        setData({ items: [], pagination: null });
-      } finally {
-        setLoading(false);
-      }
-    })();
+    fetchReports();
   }, [q, params]);
+
+  useEffect(() => {
+    if (genOpen) {
+      api.get('/inspections', { params: { limit: 10 } })
+        .then((res) => setRecentInspections(Array.isArray(res.data.data) ? res.data.data : []))
+        .catch(() => setRecentInspections([]));
+    }
+  }, [genOpen]);
 
   const generate = async () => {
     setGenerating(true);
@@ -52,11 +65,12 @@ export default function Reports() {
         if (!inspectionId) throw { friendlyMessage: `No inspection found for "${inspectionRef}"` };
       }
       await api.post('/reports', { inspectionId });
-      toast.success('Report ready');
+      toast.success('Report generated successfully');
       setGenOpen(false);
       setInspectionRef('');
+      await fetchReports();
     } catch (e) {
-      toast.error(e.friendlyMessage || 'Could not generate report');
+      toast.error(e.friendlyMessage || e.response?.data?.message || 'Could not generate report');
     } finally {
       setGenerating(false);
     }
@@ -107,14 +121,11 @@ export default function Reports() {
                       className="rounded-lg bg-primary-50 p-1.5 text-primary-700 transition hover:bg-primary-100 dark:bg-slate-800 dark:text-primary-400"
                       onClick={async () => {
                         try {
-                          const res = await api.get(`/reports/${r._id}/pdf`, { responseType: 'blob' });
-                          const url = URL.createObjectURL(new Blob([res.data], { type: 'application/pdf' }));
-                          const a = document.createElement('a');
-                          a.href = url;
-                          a.download = `${r.reportId || 'report'}.pdf`;
-                          a.click();
-                          URL.revokeObjectURL(url);
-                        } catch { toast.error('Download failed'); }
+                          await downloadReportPdf(r._id, `LMCC-${r.reportId || 'report'}`);
+                          toast.success('Download started');
+                        } catch (err) {
+                          toast.error(err.friendlyMessage || 'Download failed');
+                        }
                       }}
                     >
                       <Download size={14} />
@@ -127,14 +138,11 @@ export default function Reports() {
                       className="rounded-lg bg-slate-100 p-1.5 text-slate-500 transition hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-400"
                       onClick={async () => {
                         try {
-                          const res = await api.get(`/reports/${r._id}/export.json`, { responseType: 'blob' });
-                          const url = URL.createObjectURL(new Blob([res.data], { type: 'application/json' }));
-                          const a = document.createElement('a');
-                          a.href = url;
-                          a.download = `${r.reportId || 'report'}.json`;
-                          a.click();
-                          URL.revokeObjectURL(url);
-                        } catch { toast.error('Export failed'); }
+                          await exportReportJson(r._id, `LMCC-${r.reportId || 'report'}`);
+                          toast.success('JSON export downloaded');
+                        } catch (err) {
+                          toast.error(err.friendlyMessage || 'Export failed');
+                        }
                       }}
                     >
                       <Braces size={14} />
@@ -164,10 +172,31 @@ export default function Reports() {
       <Modal open={genOpen} onClose={() => setGenOpen(false)} title="Generate PDF report">
         <div className="space-y-4">
           <p className="text-sm text-slate-500">
-            Enter the inspection reference (e.g. <code>LMC-INS-2026-00001</code>) to produce its official report.
-            Reports are idempotent — one canonical report per inspection.
+            Select a recent inspection or enter the inspection reference (e.g. <code>LMC-INS-2026-00001</code>) to produce its official report.
           </p>
-          <Input label="Inspection reference or ID" value={inspectionRef} onChange={(e) => setInspectionRef(e.target.value)} placeholder="LMC-INS-…" />
+          {recentInspections.length > 0 && (
+            <div>
+              <label className="label">Recent inspections</label>
+              <select
+                className="input"
+                value={inspectionRef}
+                onChange={(e) => setInspectionRef(e.target.value)}
+              >
+                <option value="">— Select an inspection —</option>
+                {recentInspections.map((ins) => (
+                  <option key={ins._id} value={ins._id}>
+                    {ins.inspectionId} — {ins.productId?.productName || 'Product'} ({ins.finalStatus})
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+          <Input
+            label="Or enter inspection reference / ID manually"
+            value={inspectionRef}
+            onChange={(e) => setInspectionRef(e.target.value)}
+            placeholder="LMC-INS-…"
+          />
           <div className="flex justify-end gap-2">
             <Button variant="secondary" onClick={() => setGenOpen(false)}>Cancel</Button>
             <Button loading={generating} disabled={!inspectionRef.trim()} icon={FileText} onClick={generate}>

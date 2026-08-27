@@ -130,8 +130,14 @@ export default function Scanner() {
         ocrResultIds: ocrPerImage.map((o) => o.ocrResultId).filter(Boolean),
       };
       const res = await api.post('/inspections', payload);
+      const newInspectionId = res.data.data?.inspectionId;
+      if (newInspectionId) {
+        try {
+          await api.post('/reports', { inspectionId: newInspectionId });
+        } catch {}
+      }
       toast.success(`Inspection saved — ${res.data.data?.inspectionRef}`);
-      navigate(`/inspections/${res.data.data?.inspectionId || ''}`);
+      navigate(`/inspections/${newInspectionId || ''}`);
     } catch (e) {
       toast.error(e.friendlyMessage || 'Could not save inspection');
     } finally {

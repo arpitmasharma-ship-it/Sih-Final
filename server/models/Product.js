@@ -60,11 +60,11 @@ const productSchema = new mongoose.Schema(
     ],
 
     // Latest snapshot of extracted declarations (keyed by FIELD key)
-    extractedDeclarations: { type: Map, of: mongoose.Schema.Types.Mixed, default: {} },
+    extractedDeclarations: { type: mongoose.Schema.Types.Mixed, default: {} },
 
     complianceStatus: {
       type: String,
-      enum: ['COMPLIANT', 'NON_COMPLIANT', 'REQUIRES_REVIEW'],
+      enum: ['COMPLIANT', 'NON_COMPLIANT', 'REQUIRES_REVIEW', 'PASS_AFTER_REVIEW', 'VIOLATION_CONFIRMED'],
       index: true,
     },
     complianceScore: { type: Number, min: 0, max: 100 },

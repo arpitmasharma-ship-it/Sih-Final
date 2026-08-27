@@ -74,17 +74,23 @@ async function createInspection({ user, payload }) {
       location: location || {},
       images,
       extractedDeclarations: declarationsSnapshot,
-      complianceStatus: compliance.status,
-      complianceScore: compliance.scores.overall,
+      complianceStatus: overallStatus,
+      complianceScore: compliance.scores?.overall ?? 0,
       createdBy: user._id,
     });
   } else {
-    product.images = images;
-    product.extractedDeclarations = new Map(Object.entries(declarationsSnapshot));
-    product.complianceStatus = compliance.status;
-    product.complianceScore = compliance.scores.overall;
-    product.location = location || product.location;
-    if (barcode) product.barcode = product.barcode || barcode;
+    if (images?.length) product.images = images;
+    product.extractedDeclarations = declarationsSnapshot;
+    product.complianceStatus = overallStatus;
+    product.complianceScore = compliance.scores?.overall ?? 0;
+    if (location) product.location = location;
+    if (barcode) product.barcode = barcode;
+    if (brandName) product.brandName = brandName;
+    if (category) product.category = category;
+    if (cleanDecls.MANUFACTURER_NAME?.value) product.manufacturer = cleanDecls.MANUFACTURER_NAME.value;
+    if (cleanDecls.PACKER_NAME?.value) product.packer = cleanDecls.PACKER_NAME.value;
+    if (cleanDecls.IMPORTER_NAME?.value) product.importer = cleanDecls.IMPORTER_NAME.value;
+    product.markModified('extractedDeclarations');
     await product.save();
   }
 
@@ -161,6 +167,13 @@ async function getInspection(id, { full = true } = {}) {
     .populate('ocrResultIds', '-lines')
     .lean();
   if (!inspection) throw ApiError.notFound('Inspection not found');
+
+  const Report = require('../models/Report');
+  const report = await Report.findOne({ inspectionId: id }).sort({ createdAt: -1 }).lean();
+  if (report) {
+    inspection.reportId = report.reportId || String(report._id);
+  }
+
   return inspection;
 }
 

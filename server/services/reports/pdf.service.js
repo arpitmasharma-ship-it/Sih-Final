@@ -12,6 +12,13 @@ const BRAND = {
 
 async function loadImageBuffer(url) {
   try {
+    if (!url) return null;
+    // Prefer reading local files directly from disk without network overhead
+    if (url.startsWith('/uploads') || url.includes('uploads/')) {
+      const rel = url.replace(/^.*uploads\//, '');
+      const localPath = path.join(UPLOAD_ROOT, rel);
+      if (fs.existsSync(localPath)) return fs.readFileSync(localPath);
+    }
     const abs = absolutize(url);
     if (/^https?:\/\//i.test(abs)) {
       const res = await fetch(abs);
@@ -19,8 +26,8 @@ async function loadImageBuffer(url) {
       return Buffer.from(await res.arrayBuffer());
     }
     const localPath = path.join(UPLOAD_ROOT, url.replace(/^\/?uploads\//, ''));
-    if (!fs.existsSync(localPath)) return null;
-    return fs.readFileSync(localPath);
+    if (fs.existsSync(localPath)) return fs.readFileSync(localPath);
+    return null;
   } catch {
     return null;
   }
@@ -39,22 +46,25 @@ async function generateInspectionPdf({ inspection, product, generatedBy }) {
   // Checksum is computed over the verified content snapshot (stored in DB alongside
   // the file) so any tampering with either artifact is detectable.
   const { sha256Hex } = require('../../utils/ids');
+  const prodName = product?.productName || inspection.declarations?.PRODUCT_NAME?.value || 'Unknown Product';
   const contentChecksum = sha256Hex(
     JSON.stringify({
       id: inspection.inspectionId,
       status: inspection.finalStatus,
-      scores: inspection.scores,
+      scores: inspection.scores || {},
       violations: (inspection.violations || []).map((v) => [v.ruleCode, v.extractedValue, v.severity]),
-      product: product.productName,
+      product: prodName,
       generatedBy: generatedBy?._id?.toString?.() || '',
     })
   );
 
-  return new Promise(async (resolve) => {
-    const doc = new PDFDocument({ size: 'A4', margin: 44, bufferPages: true });
-    const chunks = [];
-    doc.on('data', (c) => chunks.push(c));
-    doc.on('end', () => resolve({ buffer: Buffer.concat(chunks) }));
+  return new Promise(async (resolve, reject) => {
+    try {
+      const doc = new PDFDocument({ size: 'A4', margin: 44, bufferPages: true });
+      const chunks = [];
+      doc.on('data', (c) => chunks.push(c));
+      doc.on('end', () => resolve({ buffer: Buffer.concat(chunks), checksum: contentChecksum }));
+      doc.on('error', reject);
 
     const W = doc.page.width - 88;
 
@@ -111,13 +121,13 @@ async function generateInspectionPdf({ inspection, product, generatedBy }) {
     // ---------- Product info ----------
     sectionTitle(doc, 'PRODUCT INFORMATION', y); y += 20;
     const pRows = [
-      ['Product Name', product.productName],
-      ['Brand', product.brandName || '-'],
-      ['Category', String(product.category || '').replace(/_/g, ' ')],
-      ['Barcode', product.barcode || '-'],
-      ['Manufacturer', product.manufacturer || cleanDeclsValue(inspection, 'MANUFACTURER_NAME') || '-'],
-      ['Packer', product.packer || cleanDeclsValue(inspection, 'PACKER_NAME') || '-'],
-      ['Importer', product.importer || cleanDeclsValue(inspection, 'IMPORTER_NAME') || '-'],
+      ['Product Name', product?.productName || prodName],
+      ['Brand', product?.brandName || cleanDeclsValue(inspection, 'BRAND_NAME') || '-'],
+      ['Category', String(product?.category || '').replace(/_/g, ' ') || '-'],
+      ['Barcode', product?.barcode || '-'],
+      ['Manufacturer', product?.manufacturer || cleanDeclsValue(inspection, 'MANUFACTURER_NAME') || '-'],
+      ['Packer', product?.packer || cleanDeclsValue(inspection, 'PACKER_NAME') || '-'],
+      ['Importer', product?.importer || cleanDeclsValue(inspection, 'IMPORTER_NAME') || '-'],
     ];
     twoColTable(doc, pRows, y); y += Math.ceil(pRows.length / 2) * 30 + 10;
 
@@ -273,7 +283,10 @@ async function generateInspectionPdf({ inspection, product, generatedBy }) {
     }
 
     doc.end();
-  }).then(({ buffer }) => ({ buffer, checksum: contentChecksum }));
+    } catch (err) {
+      reject(err);
+    }
+  });
 }
 
 function truncate(s, n) {

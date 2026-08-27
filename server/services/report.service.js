@@ -10,16 +10,28 @@ const config = require('../config/env');
 const fs = require('fs');
 
 async function createReport({ inspectionId, user }) {
-  const inspection = await Inspection.findById(inspectionId)
+  if (!inspectionId) throw ApiError.badRequest('`inspectionId` is required');
+
+  const isObjectId = /^[0-9a-fA-F]{24}$/.test(String(inspectionId).trim());
+  const inspection = await Inspection.findOne(
+    isObjectId ? { _id: String(inspectionId).trim() } : { inspectionId: String(inspectionId).trim() }
+  )
     .populate('productId')
     .populate('inspectorId', 'name email')
     .lean();
-  if (!inspection) throw ApiError.notFound('Inspection not found');
+  if (!inspection) throw ApiError.notFound(`Inspection "${inspectionId}" not found`);
 
-  const existing = await Report.findOne({ inspectionId }).sort({ createdAt: -1 });
+  const actualInspectionId = inspection._id;
+  const existing = await Report.findOne({ inspectionId: actualInspectionId }).sort({ createdAt: -1 });
   if (existing) {
-    // Idempotent: return the latest report for this inspection
-    return { report: existing, regenerated: false };
+    if (existing.fileUrl?.startsWith('/uploads')) {
+      const filePath = require('path').join(__dirname, '..', '..', existing.fileUrl.replace(/^\//, ''));
+      if (fs.existsSync(filePath)) {
+        return { report: existing, regenerated: false };
+      }
+    } else if (existing.fileUrl?.startsWith('http')) {
+      return { report: existing, regenerated: false };
+    }
   }
 
   const reportId = await getNextSequence('report', 'LMC-RPT', 6);
@@ -32,8 +44,8 @@ async function createReport({ inspectionId, user }) {
   });
 
   let fileUrl;
-  let publicId;
-  let provider;
+  let publicId = null;
+  let provider = 'local';
   if (config.cloudinary.enabled) {
     const stored = await uploadImage(buffer, {
       folder: 'lmcc/reports',
@@ -41,7 +53,7 @@ async function createReport({ inspectionId, user }) {
     });
     fileUrl = stored.url;
     publicId = stored.publicId;
-    provider = 'cloudinary';
+    provider = stored.provider || (stored.url?.startsWith('http') ? 'cloudinary' : 'local');
   } else {
     const dir = require('path').join(__dirname, '..', '..', 'uploads', 'reports');
     fs.mkdirSync(dir, { recursive: true });
@@ -52,15 +64,15 @@ async function createReport({ inspectionId, user }) {
 
   const report = await Report.create({
     reportId,
-    inspectionId,
-    generatedBy: user._id,
+    inspectionId: actualInspectionId,
+    generatedBy: user?._id || inspection.inspectorId?._id,
     fileUrl,
     publicId,
     storageProvider: provider,
     checksumSha256: checksum,
     sizeBytes: buffer.length,
     snapshot: {
-      productName: inspection.productId?.productName || '',
+      productName: inspection.productId?.productName || inspection.declarations?.PRODUCT_NAME?.value || '',
       finalStatus: inspection.finalStatus,
       complianceScore: inspection.scores?.overall ?? null,
       violationsCount: (inspection.violations || []).length,
@@ -70,11 +82,24 @@ async function createReport({ inspectionId, user }) {
 }
 
 async function getReport(idOrReportId) {
-  const isObjectId = /^[0-9a-fA-F]{24}$/.test(idOrReportId);
-  const report = await Report.findOne(isObjectId ? { _id: idOrReportId } : { reportId: idOrReportId })
+  if (!idOrReportId) throw ApiError.notFound('Report not found');
+  const cleanId = String(idOrReportId).trim();
+  const isObjectId = /^[0-9a-fA-F]{24}$/.test(cleanId);
+
+  let report = await Report.findOne(
+    isObjectId ? { $or: [{ _id: cleanId }, { inspectionId: cleanId }] } : { reportId: cleanId }
+  )
     .populate('inspectionId')
     .lean();
-  if (!report) throw ApiError.notFound('Report not found');
+
+  if (!report && cleanId.startsWith('LMC-INS')) {
+    const inspection = await Inspection.findOne({ inspectionId: cleanId }).lean();
+    if (inspection) {
+      report = await Report.findOne({ inspectionId: inspection._id }).populate('inspectionId').lean();
+    }
+  }
+
+  if (!report) throw ApiError.notFound(`Report for "${cleanId}" not found`);
   return report;
 }
 

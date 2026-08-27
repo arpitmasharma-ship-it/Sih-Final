@@ -100,6 +100,5 @@ const inspectionSchema = new mongoose.Schema(
 
 inspectionSchema.index({ createdAt: -1 });
 inspectionSchema.index({ 'location.district': 1 });
-inspectionSchema.index({ finalStatus: 1 });
 
 module.exports = mongoose.model('Inspection', inspectionSchema);

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { PackageSearch, Plus } from 'lucide-react';
+import { PackageSearch, Plus, RefreshCw } from 'lucide-react';
 import api from '../../services/api';
 import PageHeader from '../../components/ui/PageHeader';
 import Card from '../../components/ui/Card';
@@ -8,7 +8,7 @@ import Badge from '../../components/ui/Badge';
 import Button from '../../components/ui/Button';
 import Input from '../../components/ui/Input';
 import { TableSkeleton, EmptyState } from '../../components/ui/Feedback';
-import Pagination from '../../components/ui/DataTable';
+import { Pagination } from '../../components/ui/DataTable';
 import { useDebounce } from '../../hooks';
 import { fmtDate } from '../../utils/format';
 
@@ -21,25 +21,27 @@ export default function Products() {
   const [status, setStatus] = useState(params.get('status') || '');
   const debouncedQ = useDebounce(q);
 
+  const fetchProducts = async () => {
+    setLoading(true);
+    try {
+      const res = await api.get('/products', {
+        params: {
+          q: debouncedQ || undefined,
+          status: status || undefined,
+          page: params.get('page') || 1,
+          limit: 12,
+        },
+      });
+      setData({ items: Array.isArray(res.data.data) ? res.data.data : [], pagination: res.data.pagination || null });
+    } catch {
+      setData({ items: [], pagination: null });
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    (async () => {
-      setLoading(true);
-      try {
-        const res = await api.get('/products', {
-          params: {
-            q: debouncedQ || undefined,
-            status: status || undefined,
-            page: params.get('page') || 1,
-            limit: 12,
-          },
-        });
-        setData({ items: Array.isArray(res.data.data) ? res.data.data : [], pagination: res.data.pagination || null });
-      } catch {
-        setData({ items: [], pagination: null });
-      } finally {
-        setLoading(false);
-      }
-    })();
+    fetchProducts();
   }, [debouncedQ, status, params]);
 
   return (
@@ -47,6 +49,16 @@ export default function Products() {
       <PageHeader
         title="Products"
         subtitle="Every scanned packaged commodity and its latest compliance status."
+        right={
+          <div className="flex items-center gap-2">
+            <Button size="sm" variant="secondary" icon={RefreshCw} loading={loading} onClick={fetchProducts}>
+              Refresh
+            </Button>
+            <Button size="sm" icon={Plus} onClick={() => navigate('/scanner')}>
+              New scan
+            </Button>
+          </div>
+        }
       />
 
       <Card className="mb-4">
@@ -61,11 +73,10 @@ export default function Products() {
               <option value="COMPLIANT">Compliant</option>
               <option value="NON_COMPLIANT">Non-compliant</option>
               <option value="REQUIRES_REVIEW">Requires review</option>
+              <option value="PASS_AFTER_REVIEW">Pass after review</option>
+              <option value="VIOLATION_CONFIRMED">Violation confirmed</option>
             </select>
           </div>
-          <Button icon={Plus} onClick={() => navigate('/scanner')}>
-            New scan
-          </Button>
         </div>
       </Card>
 

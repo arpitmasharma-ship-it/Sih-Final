@@ -23,15 +23,35 @@ const Report = require('../models/Report');
 const Counter = require('../models/Counter');
 const logger = require('../utils/logger');
 
-const ADMIN = {
-  name: 'System Administrator',
-  email: 'admin@lmcc.gov.in',
-  password: 'Admin@1234',
-  role: 'ADMIN',
-  department: 'Legal Metrology HQ',
-  state: 'Delhi',
-  district: 'New Delhi',
-};
+const SEED_USERS = [
+  {
+    name: 'System Administrator',
+    email: 'admin@lmcc.gov.in',
+    password: 'Admin@1234',
+    role: 'ADMIN',
+    department: 'Legal Metrology HQ',
+    state: 'Delhi',
+    district: 'New Delhi',
+  },
+  {
+    name: 'Field Inspector',
+    email: 'inspector@lmcc.gov.in',
+    password: 'Insp@1234',
+    role: 'INSPECTOR',
+    department: 'Enforcement Wing',
+    state: 'Delhi',
+    district: 'Central Delhi',
+  },
+  {
+    name: 'Compliance Analyst',
+    email: 'analyst@lmcc.gov.in',
+    password: 'Anal@1234',
+    role: 'ANALYST',
+    department: 'Legal Metrology Intelligence',
+    state: 'Delhi',
+    district: 'New Delhi',
+  },
+];
 
 async function main() {
   const fresh = process.argv.includes('--fresh');
@@ -55,20 +75,23 @@ async function main() {
   const rulesUpserted = await syncRulesFromSeed();
   logger.info(`Rules synced: ${rulesUpserted}`);
 
-  // Upsert admin user (never overwrite password if already exists)
-  const existing = await User.findOne({ email: ADMIN.email });
-  if (!existing) {
-    await User.create(ADMIN);
-    logger.info(`Admin created: ${ADMIN.email}`);
-  } else {
-    logger.info(`Admin already exists: ${ADMIN.email} (skipping)`);
+  // Upsert seed users
+  for (const u of SEED_USERS) {
+    const existing = await User.findOne({ email: u.email });
+    if (!existing) {
+      await User.create(u);
+      logger.info(`User created [${u.role}]: ${u.email}`);
+    } else {
+      logger.info(`User already exists [${u.role}]: ${u.email} (skipping)`);
+    }
   }
 
   logger.info('');
   logger.info('=== Seed complete ===');
-  logger.info('Admin login:');
-  logger.info(`  Email:    ${ADMIN.email}`);
-  logger.info(`  Password: ${ADMIN.password}`);
+  logger.info('Default logins:');
+  logger.info('  Admin:     admin@lmcc.gov.in     / Admin@1234');
+  logger.info('  Inspector: inspector@lmcc.gov.in / Insp@1234');
+  logger.info('  Analyst:   analyst@lmcc.gov.in   / Anal@1234');
   logger.info('');
   logger.info('Next steps:');
   logger.info('  1. Log in as admin');

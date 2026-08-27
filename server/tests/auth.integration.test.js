@@ -6,6 +6,7 @@
 const request = require('supertest');
 const mongoose = require('mongoose');
 const { MongoMemoryServer } = require('mongodb-memory-server');
+const hasMemoryServer = Boolean(MongoMemoryServer);
 
 (hasMemoryServer ? describe : describe.skip)('Auth API', () => {
   let app;
