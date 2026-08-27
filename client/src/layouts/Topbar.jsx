@@ -34,11 +34,12 @@ export default function Topbar() {
   };
 
   return (
-    <header className="sticky top-0 z-30 flex h-14 items-center gap-3 border-b border-slate-200 dark:border-slate-800 bg-white/85 dark:bg-slate-900/85 px-4 backdrop-blur">
+    <header className="sticky top-0 z-30 flex h-14 items-center gap-3 border-b border-slate-200/80 dark:border-slate-800/80 bg-white/90 dark:bg-slate-900/90 px-5 backdrop-blur-md">
       <button className="rounded-lg p-2 hover:bg-slate-100 dark:hover:bg-slate-800 lg:hidden" onClick={() => dispatch(setSidebarOpen(true))} aria-label="Open menu">
         <Menu size={19} />
       </button>
 
+      {/* Global Search Bar with Keyboard Hint */}
       <form
         className="relative hidden flex-1 max-w-md sm:block"
         onSubmit={(e) => {
@@ -47,11 +48,24 @@ export default function Topbar() {
           if (q?.trim()) navigate(`/search?q=${encodeURIComponent(q.trim())}`);
         }}
       >
-        <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-        <input name="q" placeholder="Search products, inspections, rule codes…" className="input pl-9 py-1.5" />
+        <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+        <input
+          name="q"
+          placeholder="Search products, inspections, LMPC rule codes..."
+          className="w-full rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-950/80 pl-9 pr-14 py-1.5 text-xs text-slate-900 dark:text-white placeholder:text-slate-400 focus:bg-white dark:focus:bg-slate-900 focus:border-primary-600 focus:outline-none focus:ring-1 focus:ring-primary-500/20 transition"
+        />
+        <span className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-1.5 py-0.5 text-[10px] font-bold text-slate-400 shadow-2xs">
+          ⌘K
+        </span>
       </form>
 
-      <div className="ml-auto flex items-center gap-1">
+      {/* Status Pill */}
+      <div className="hidden xl:flex items-center gap-1.5 rounded-full border border-emerald-200 dark:border-emerald-900/60 bg-emerald-50 dark:bg-emerald-950/50 px-2.5 py-1 text-[10px] font-semibold text-emerald-700 dark:text-emerald-300">
+        <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+        <span>LMPC Verification Engine Online</span>
+      </div>
+
+      <div className="ml-auto flex items-center gap-1.5">
         <button
           onClick={() => navigate('/search')}
           className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800 sm:hidden"
