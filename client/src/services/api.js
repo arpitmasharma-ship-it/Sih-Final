@@ -21,9 +21,11 @@ api.interceptors.response.use(
 );
 
 export function buildAssetUrl(url) {
-  if (!url) return url;
-  if (/^https?:\/\//i.test(url)) return url;
-  return `${SERVER_URL}${url}`;
+  if (!url) return '';
+  if (/^(https?:\/\/|data:|blob:)/i.test(url)) return url;
+  const base = (SERVER_URL || '').replace(/\/$/, '');
+  const cleanPath = url.startsWith('/') ? url : `/${url}`;
+  return `${base}${cleanPath}`;
 }
 
 export default api;
