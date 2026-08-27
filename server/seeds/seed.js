@@ -26,8 +26,8 @@ const logger = require('../utils/logger');
 const SEED_USERS = [
   {
     name: 'System Administrator',
-    email: 'admin@lmcc.gov.in',
-    password: 'Admin@1234',
+    email: 'arpita@gmail.com',
+    password: 'Arpita123',
     role: 'ADMIN',
     department: 'Legal Metrology HQ',
     state: 'Delhi',
@@ -35,8 +35,8 @@ const SEED_USERS = [
   },
   {
     name: 'Field Inspector',
-    email: 'inspector@lmcc.gov.in',
-    password: 'Insp@1234',
+    email: 'arpiti@gmail.com',
+    password: 'Arpiti123',
     role: 'INSPECTOR',
     department: 'Enforcement Wing',
     state: 'Delhi',
@@ -77,20 +77,28 @@ async function main() {
 
   // Upsert seed users
   for (const u of SEED_USERS) {
-    const existing = await User.findOne({ email: u.email });
+    let existing = await User.findOne({ email: u.email.toLowerCase() });
+    if (!existing) {
+      // Check if role exists with old email and update
+      existing = await User.findOne({ role: u.role });
+    }
     if (!existing) {
       await User.create(u);
       logger.info(`User created [${u.role}]: ${u.email}`);
     } else {
-      logger.info(`User already exists [${u.role}]: ${u.email} (skipping)`);
+      existing.name = u.name;
+      existing.email = u.email;
+      existing.password = u.password;
+      await existing.save();
+      logger.info(`User updated [${u.role}]: ${u.email}`);
     }
   }
 
   logger.info('');
   logger.info('=== Seed complete ===');
   logger.info('Default logins:');
-  logger.info('  Admin:     admin@lmcc.gov.in     / Admin@1234');
-  logger.info('  Inspector: inspector@lmcc.gov.in / Insp@1234');
+  logger.info('  Admin:     Arpita@gmail.com / Arpita123');
+  logger.info('  Inspector: Arpiti@gmail.com / Arpiti123');
   logger.info('  Analyst:   analyst@lmcc.gov.in   / Anal@1234');
   logger.info('');
   logger.info('Next steps:');

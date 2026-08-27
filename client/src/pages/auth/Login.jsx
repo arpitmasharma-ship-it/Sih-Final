@@ -30,8 +30,8 @@ export default function Login() {
 
   const fillDemo = (role) => {
     const creds = {
-      ADMIN: ['admin@lmcc.gov.in', 'Admin@1234'],
-      INSPECTOR: ['inspector@lmcc.gov.in', 'Insp@1234'],
+      ADMIN: ['Arpita@gmail.com', 'Arpita123'],
+      INSPECTOR: ['Arpiti@gmail.com', 'Arpiti123'],
       ANALYST: ['analyst@lmcc.gov.in', 'Anal@1234'],
     }[role];
     setValue('email', creds[0], { shouldValidate: true });
