@@ -116,10 +116,13 @@ async function listReports(query = {}) {
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(limit)
+      .select('reportId inspectionId generatedBy fileUrl sizeBytes snapshot createdAt')
       .populate('inspectionId', 'inspectionId finalStatus')
       .populate('generatedBy', 'name')
       .lean(),
-    Report.countDocuments(filter),
+    Object.keys(filter).length === 0
+      ? Report.estimatedDocumentCount().catch(() => Report.countDocuments(filter))
+      : Report.countDocuments(filter),
   ]);
   return { items, total, page, limit };
 }

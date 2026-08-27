@@ -149,10 +149,13 @@ async function listInspections(query) {
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(limit)
-      .populate('productId', 'productName category images')
+      .select('inspectionId finalStatus scores summary location createdAt productId inspectorId')
+      .populate('productId', 'productName category')
       .populate('inspectorId', 'name')
       .lean(),
-    Inspection.countDocuments(filter),
+    Object.keys(filter).length === 0
+      ? Inspection.estimatedDocumentCount().catch(() => Inspection.countDocuments(filter))
+      : Inspection.countDocuments(filter),
   ]);
   return { items, total, page, limit };
 }

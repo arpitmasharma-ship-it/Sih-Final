@@ -3,6 +3,7 @@ const dns = require("node:dns");
 
 dns.setServers(["8.8.8.8", "8.8.4.4"]);
 const express = require('express');
+const compression = require('compression');
 const cors = require('cors');
 const helmet = require('helmet');
 const cookieParser = require('cookie-parser');
@@ -19,6 +20,7 @@ function createApp() {
   app.set('trust proxy', 1);
   app.disable('x-powered-by');
 
+  app.use(compression());
   app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
   app.use(
     cors({

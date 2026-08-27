@@ -28,9 +28,12 @@ async function listProducts(query) {
       .sort({ updatedAt: -1 })
       .skip(skip)
       .limit(limit)
+      .select('productName brandName category barcode manufacturer packer importer location images complianceStatus complianceScore createdAt updatedAt createdBy')
       .populate('createdBy', 'name')
       .lean(),
-    Product.countDocuments(filter),
+    Object.keys(filter).length === 0
+      ? Product.estimatedDocumentCount().catch(() => Product.countDocuments(filter))
+      : Product.countDocuments(filter),
   ]);
   return { items, total, page, limit };
 }

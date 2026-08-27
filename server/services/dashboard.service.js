@@ -17,30 +17,41 @@ async function summary({ district, category, from, to, inspectorId } = {}) {
     }
   }
 
-  const [totalProducts, totalInspections, statusAgg, highSeverity, avgScore] = await Promise.all([
+  // Single-pass facet aggregation on Inspection collection
+  const [totalProducts, [inspectionStats], reportsCount] = await Promise.all([
     Product.countDocuments(category ? { category } : {}),
-    Inspection.countDocuments(matchIns),
     Inspection.aggregate([
       { $match: matchIns },
       {
-        $group: {
-          _id: '$finalStatus',
-          count: { $sum: 1 },
-          avgScore: { $avg: '$scores.overall' },
+        $facet: {
+          totalCount: [{ $count: 'count' }],
+          byStatus: [
+            {
+              $group: {
+                _id: '$finalStatus',
+                count: { $sum: 1 },
+                avgScore: { $avg: '$scores.overall' },
+              },
+            },
+          ],
+          highSeverity: [
+            { $unwind: '$violations' },
+            { $match: { 'violations.severity': { $in: ['HIGH', 'CRITICAL'] } } },
+            { $count: 'count' },
+          ],
+          overallScore: [
+            { $group: { _id: null, avg: { $avg: '$scores.overall' } } },
+          ],
         },
       },
     ]),
-    Inspection.aggregate([
-      { $match: matchIns },
-      { $unwind: '$violations' },
-      { $match: { 'violations.severity': { $in: ['HIGH', 'CRITICAL'] } } },
-      { $count: 'count' },
-    ]),
-    Inspection.aggregate([
-      { $match: matchIns },
-      { $group: { _id: null, avg: { $avg: '$scores.overall' } } },
-    ]),
+    Report.estimatedDocumentCount().catch(() => Report.countDocuments()),
   ]);
+
+  const totalInspections = inspectionStats?.totalCount[0]?.count || 0;
+  const statusAgg = inspectionStats?.byStatus || [];
+  const highSeverity = inspectionStats?.highSeverity[0]?.count || 0;
+  const avgScore = inspectionStats?.overallScore[0]?.avg ?? 0;
 
   const byStatus = {};
   let scoreSum = 0;
@@ -54,8 +65,7 @@ async function summary({ district, category, from, to, inspectorId } = {}) {
   });
 
   const compliant = byStatus.COMPLIANT || byStatus.PASS_AFTER_REVIEW || 0;
-  const nonCompliant =
-    (byStatus.NON_COMPLIANT || 0) + (byStatus.VIOLATION_CONFIRMED || 0);
+  const nonCompliant = (byStatus.NON_COMPLIANT || 0) + (byStatus.VIOLATION_CONFIRMED || 0);
   const requiresReview = byStatus.REQUIRES_REVIEW || 0;
 
   return {
@@ -64,11 +74,10 @@ async function summary({ district, category, from, to, inspectorId } = {}) {
     compliant,
     nonCompliant,
     requiresReview,
-    highSeverityViolations: highSeverity[0]?.count || 0,
-    compliancePercentage:
-      totalInspections > 0 ? Math.round((compliant / totalInspections) * 100) : 0,
-    averageComplianceScore: Math.round((scoreCount > 0 ? scoreSum / scoreCount : (avgScore[0]?.avg ?? 0)) * 10) / 10,
-    reportsGenerated: await Report.countDocuments(),
+    highSeverityViolations: highSeverity,
+    compliancePercentage: totalInspections > 0 ? Math.round((compliant / totalInspections) * 100) : 0,
+    averageComplianceScore: Math.round((scoreCount > 0 ? scoreSum / scoreCount : avgScore) * 10) / 10,
+    reportsGenerated: reportsCount,
   };
 }
 
