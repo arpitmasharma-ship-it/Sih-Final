@@ -39,10 +39,14 @@ exports.getOne = asyncHandler(async (req, res) => {
 
 exports.getPdf = asyncHandler(async (req, res) => {
   let report;
+  let inspection;
+  const Inspection = require('../models/Inspection');
+  const { generateInspectionPdf } = require('../services/reports/pdf.service');
+
   try {
     report = await reportService.getReport(req.params.id);
   } catch (err) {
-    // If not found as report ID, try creating a report for the inspection
+    // If not found as report ID, try creating/finding report for the inspection ID
     const createdRes = await reportService.createReport({
       inspectionId: req.params.id,
       user: req.user,
@@ -50,31 +54,48 @@ exports.getPdf = asyncHandler(async (req, res) => {
     report = createdRes.report;
   }
 
-  if (report.fileUrl?.startsWith('/uploads')) {
+  const inspectionId = report?.inspectionId?._id || report?.inspectionId || req.params.id;
+  inspection = await Inspection.findById(inspectionId)
+    .populate('productId')
+    .populate('inspectorId', 'name email')
+    .lean();
+
+  if (!inspection && String(inspectionId).startsWith('LMC-INS')) {
+    inspection = await Inspection.findOne({ inspectionId })
+      .populate('productId')
+      .populate('inspectorId', 'name email')
+      .lean();
+  }
+
+  // 1. If file exists on disk, stream it
+  if (report?.fileUrl?.startsWith('/uploads')) {
     const filePath = path.join(__dirname, '..', '..', report.fileUrl.replace(/^\//, ''));
-    if (!fs.existsSync(filePath)) {
-      const Inspection = require('../models/Inspection');
-      const inspection = await Inspection.findById(report.inspectionId?._id || report.inspectionId)
-        .populate('productId')
-        .populate('inspectorId', 'name email')
-        .lean();
-      if (inspection) {
-        const { generateInspectionPdf } = require('../services/reports/pdf.service');
-        const { buffer } = await generateInspectionPdf({
-          inspection,
-          product: inspection.productId,
-          generatedBy: req.user,
-        });
-        fs.mkdirSync(path.dirname(filePath), { recursive: true });
-        fs.writeFileSync(filePath, buffer);
-      }
-    }
     if (fs.existsSync(filePath)) {
-      return res.download(filePath, `LMCC-${report.reportId}.pdf`);
+      const fileBuffer = fs.readFileSync(filePath);
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `attachment; filename="LMCC-${report.reportId || 'report'}.pdf"`);
+      return res.send(fileBuffer);
     }
   }
-  if (/^https?:\/\//.test(report.fileUrl)) return res.redirect(report.fileUrl);
-  throw ApiError.notFound('Report file unavailable');
+
+  // 2. If hosted on Cloudinary, redirect
+  if (/^https?:\/\//.test(report?.fileUrl)) {
+    return res.redirect(report.fileUrl);
+  }
+
+  // 3. Generate on-the-fly and stream buffer directly
+  if (inspection) {
+    const { buffer } = await generateInspectionPdf({
+      inspection,
+      product: inspection.productId,
+      generatedBy: req.user,
+    });
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="LMCC-${report?.reportId || inspection.inspectionId}.pdf"`);
+    return res.send(buffer);
+  }
+
+  throw ApiError.notFound('Inspection record not found for PDF generation');
 });
 
 exports.exportJson = asyncHandler(async (req, res) => {

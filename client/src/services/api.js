@@ -8,8 +8,39 @@ const api = axios.create({
   timeout: 120000,
 });
 
+// Fast in-memory cache for GET requests (10s TTL)
+const clientCache = new Map();
+
+function getCacheKey(config) {
+  if (config.method?.toLowerCase() !== 'get') return null;
+  if (config.responseType === 'blob' || config.responseType === 'arraybuffer') return null;
+  const url = config.url || '';
+  if (url.includes('/auth/me') || url.includes('/pdf') || url.includes('/export')) return null;
+  const params = config.params ? JSON.stringify(config.params) : '';
+  return `${url}?${params}`;
+}
+
+export function clearClientCache() {
+  clientCache.clear();
+}
+
+api.interceptors.request.use((config) => {
+  const method = config.method?.toLowerCase();
+  // Clear cache on write operations
+  if (['post', 'put', 'patch', 'delete'].includes(method)) {
+    clientCache.clear();
+  }
+  return config;
+});
+
 api.interceptors.response.use(
-  (res) => res,
+  (res) => {
+    const key = getCacheKey(res.config);
+    if (key) {
+      clientCache.set(key, { data: res.data, time: Date.now() });
+    }
+    return res;
+  },
   (err) => {
     const message =
       err?.response?.data?.message ||

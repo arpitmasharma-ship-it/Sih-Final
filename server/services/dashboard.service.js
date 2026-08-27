@@ -3,7 +3,26 @@ const Product = require('../models/Product');
 const User = require('../models/User');
 const Report = require('../models/Report');
 
+// Fast in-memory cache for dashboard aggregates (TTL: 20 seconds)
+const _cache = new Map();
+function getCached(key) {
+  const item = _cache.get(key);
+  if (item && Date.now() < item.expiry) return item.value;
+  return null;
+}
+function setCached(key, value, ttlSec = 20) {
+  _cache.set(key, { value, expiry: Date.now() + ttlSec * 1000 });
+  if (_cache.size > 200) {
+    const oldestKey = _cache.keys().next().value;
+    _cache.delete(oldestKey);
+  }
+}
+
 async function summary({ district, category, from, to, inspectorId } = {}) {
+  const cacheKey = `summary:${district || ''}:${category || ''}:${from || ''}:${to || ''}:${inspectorId || ''}`;
+  const cached = getCached(cacheKey);
+  if (cached) return cached;
+
   const matchIns = {};
   if (district) matchIns['location.district'] = new RegExp(district, 'i');
   if (inspectorId) matchIns.inspectorId = inspectorId;
@@ -68,7 +87,7 @@ async function summary({ district, category, from, to, inspectorId } = {}) {
   const nonCompliant = (byStatus.NON_COMPLIANT || 0) + (byStatus.VIOLATION_CONFIRMED || 0);
   const requiresReview = byStatus.REQUIRES_REVIEW || 0;
 
-  return {
+  const result = {
     totalProducts,
     totalInspections,
     compliant,
@@ -79,9 +98,15 @@ async function summary({ district, category, from, to, inspectorId } = {}) {
     averageComplianceScore: Math.round((scoreCount > 0 ? scoreSum / scoreCount : avgScore) * 10) / 10,
     reportsGenerated: reportsCount,
   };
+  setCached(cacheKey, result, 15);
+  return result;
 }
 
 async function trends({ months = 6, district } = {}) {
+  const cacheKey = `trends:${months}:${district || ''}`;
+  const cached = getCached(cacheKey);
+  if (cached) return cached;
+
   const since = new Date();
   since.setMonth(since.getMonth() - (months - 1));
   since.setDate(1);
@@ -108,7 +133,7 @@ async function trends({ months = 6, district } = {}) {
     { $sort: { '_id.y': 1, '_id.m': 1 } },
   ]);
 
-  return monthly.map((r) => ({
+  const result = monthly.map((r) => ({
     month: `${new Date(0).toLocaleString('en', { month: 'short' }).length ? '' : ''}${[
       'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
       'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
@@ -119,9 +144,14 @@ async function trends({ months = 6, district } = {}) {
     complianceRate: r.inspections > 0 ? Math.round((r.compliant / r.inspections) * 100) : 0,
     avgScore: Math.round((r.avgScore || 0) * 10) / 10,
   }));
+  setCached(cacheKey, result, 30);
+  return result;
 }
 
 async function violationStats() {
+  const cacheKey = 'violations:all';
+  const cached = getCached(cacheKey);
+  if (cached) return cached;
   const [byCategory, bySeverity, mostCommon] = await Promise.all([
     Inspection.aggregate([
       { $unwind: '$violations' },
@@ -146,14 +176,20 @@ async function violationStats() {
       { $limit: 8 },
     ]),
   ]);
-  return {
+  const result = {
     byCategory: byCategory.map((x) => ({ name: x._id || 'OTHER', value: x.count })),
     bySeverity: bySeverity.map((x) => ({ name: x._id, value: x.count })),
     mostCommon: mostCommon.map((x) => ({ ruleCode: x._id.code, title: x._id.title, count: x.count, severity: x.severity })),
   };
+  setCached(cacheKey, result, 30);
+  return result;
 }
 
 async function districtStats() {
+  const cacheKey = 'districts:all';
+  const cached = getCached(cacheKey);
+  if (cached) return cached;
+
   const rows = await Inspection.aggregate([
     { $match: { 'location.district': { $exists: true, $ne: null } } },
     {
@@ -169,7 +205,7 @@ async function districtStats() {
     },
     { $sort: { violations: -1 } },
   ]);
-  return rows.map((r) => ({
+  const result = rows.map((r) => ({
     district: r._id.district,
     state: r._id.state || '',
     inspections: r.inspections,
@@ -182,6 +218,8 @@ async function districtStats() {
     complianceRate: r.inspections > 0 ? Math.round((r.compliant / r.inspections) * 100) : 0,
     avgScore: Math.round((r.avgScore || 0) * 10) / 10,
   }));
+  setCached(cacheKey, result, 30);
+  return result;
 }
 
 async function inspectorsLeaderboard() {
