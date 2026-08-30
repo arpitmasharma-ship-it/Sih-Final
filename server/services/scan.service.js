@@ -14,12 +14,19 @@ async function processOneImage(file, { imageIndex, label, provider, variant }) {
   // upload (fast, small payload) and OCR (avoids a JPEG encode/decode round-trip).
   const prepared = await preprocessForOcr(file.buffer);
 
-  // Execute upload (network) and OCR (CPU) concurrently against the prepared image
+  // Execute upload (network) and OCR (CPU) concurrently against the prepared image.
+  // A storage failure must NOT sink the whole OCR job: fall back to an inline
+  // data URL of the compact image so the evidence still displays and OCR survives.
   const [stored, ocrData] = await Promise.all([
     uploadImage(prepared.buffer, {
       folder: 'lmcc/scans',
       filename: file.originalname || 'scan.jpg',
-    }),
+    }).catch((err) => ({
+      url: `data:image/jpeg;base64,${prepared.buffer.toString('base64')}`,
+      publicId: null,
+      provider: 'inline',
+      storageError: err?.message,
+    })),
     processImageBuffer(file.buffer, {
       imageIndex,
       filename: file.originalname,

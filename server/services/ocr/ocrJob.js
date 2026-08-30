@@ -1,5 +1,6 @@
 const OcrJob = require('../../models/OcrJob');
 const scanService = require('../scan.service');
+const logger = require('../../utils/logger');
 
 /**
  * Asynchronous OCR job registry (durable).
@@ -78,6 +79,7 @@ async function createJob(files, options = {}) {
     .then((updated) => updated && cacheSet(updated))
     .catch(async (err) => {
       const error = err?.message || 'OCR processing failed';
+      logger.error(`OCR job ${jobId} failed:`, err);
       try {
         const updated = await OcrJob.findOneAndUpdate(
           { jobId },
