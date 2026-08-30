@@ -32,7 +32,11 @@ async function uploadImage(buffer, { folder = 'lmcc', filename = 'image.png' } =
         stream.end(buffer);
       });
     } catch (err) {
-      console.warn('[STORAGE] Cloudinary upload failed, falling back to local disk storage:', err.message);
+      const detail = err?.http_code ? ` (HTTP ${err.http_code})` : '';
+      console.warn(
+        '[STORAGE] Cloudinary upload failed, falling back to local disk storage:',
+        err?.message + detail || err
+      );
     }
   }
 
