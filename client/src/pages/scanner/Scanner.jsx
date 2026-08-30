@@ -78,7 +78,9 @@ export default function Scanner() {
 
       let d = null;
       for (let attempt = 0; attempt < 600; attempt++) {
-        await new Promise((r) => setTimeout(r, 800));
+        // Gentle, non-aggressive polling (helps avoid privacy extensions and
+        // rate-limiters treating rapid same-host GETs as bot traffic).
+        await new Promise((r) => setTimeout(r, 1200 + Math.min(attempt, 12) * 200));
         const statusRes = await api.get(`/scan/ocr/${jobId}`);
         const job = statusRes.data?.data;
         if (job?.status === 'completed') {
