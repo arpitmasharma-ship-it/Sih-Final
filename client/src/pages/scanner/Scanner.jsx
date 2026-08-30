@@ -71,18 +71,39 @@ export default function Scanner() {
       if (variant) fd.append('variant', variant);
 
       // Submit as an async job; poll until it completes so the UI is responsive
-      // while OCR + image upload run in the background.
-      const res = await api.post('/scan/ocr', fd);
-      const jobId = res.data?.data?.jobId;
+      // while OCR + image upload run in the background. Retry the submit on
+      // transient network errors (e.g. Render free tier waking from sleep).
+      let res;
+      for (let t = 0; t < 3; t++) {
+        try {
+          res = await api.post('/scan/ocr', fd);
+          break;
+        } catch (err) {
+          if (err?.code !== 'ERR_NETWORK' && err?.code !== 'ECONNABORTED') throw err;
+          if (t === 2) throw err;
+          await new Promise((r) => setTimeout(r, 3000));
+        }
+      }
+      const jobId = res?.data?.data?.jobId;
       if (!jobId) throw new Error('No job id returned from server');
 
       let d = null;
+      let silentNetworkFails = 0;
       for (let attempt = 0; attempt < 600; attempt++) {
         // Gentle, non-aggressive polling (helps avoid privacy extensions and
         // rate-limiters treating rapid same-host GETs as bot traffic).
         await new Promise((r) => setTimeout(r, 1200 + Math.min(attempt, 12) * 200));
-        const statusRes = await api.get(`/scan/ocr/${jobId}`);
-        const job = statusRes.data?.data;
+        let job;
+        try {
+          const statusRes = await api.get(`/scan/ocr/${jobId}`);
+          job = statusRes.data?.data;
+          silentNetworkFails = 0;
+        } catch (err) {
+          // Transient network errors (backend sleeping on Render free tier after
+          // idle, or a redeploy in progress) should be retried, not fatal.
+          if (silentNetworkFails++ > 25) throw err;
+          continue;
+        }
         if (job?.status === 'completed') {
           d = job.data;
           break;
