@@ -74,7 +74,8 @@ export default function Scanner() {
       // while OCR + image upload run in the background. Retry the submit on
       // transient network errors (e.g. Render free tier waking from sleep).
       let res;
-      for (let t = 0; t < 3; t++) {
+      const BACKOFF = [3000, 8000, 15000, 25000, 40000];
+      for (let t = 0; t < BACKOFF.length + 1; t++) {
         try {
           res = await api.post('/scan/ocr', fd);
           break;
@@ -88,8 +89,8 @@ export default function Scanner() {
             err?.response?.status === 502 ||
             err?.response?.status === 503;
           if (!transient) throw err;
-          if (t === 2) throw err;
-          await new Promise((r) => setTimeout(r, 3000 * (t + 1)));
+          if (t >= BACKOFF.length) throw err;
+          await new Promise((r) => setTimeout(r, BACKOFF[t]));
         }
       }
       const jobId = res?.data?.data?.jobId;

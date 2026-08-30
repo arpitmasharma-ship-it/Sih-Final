@@ -21,6 +21,7 @@ const ocrJobSchema = new mongoose.Schema(
     imagesCount: { type: Number, default: 0 },
     result: { type: mongoose.Schema.Types.Mixed, default: null },
     error: { type: String, default: null },
+    errorStack: { type: String, default: null },
   },
   { timestamps: true }
 );

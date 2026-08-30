@@ -78,12 +78,14 @@ async function createJob(files, options = {}) {
     )
     .then((updated) => updated && cacheSet(updated))
     .catch(async (err) => {
-      const error = err?.message || 'OCR processing failed';
-      logger.error(`OCR job ${jobId} failed:`, err);
+      const message = err?.message ? String(err.message) : err?.name || String(err || 'unknown');
+      const error = message || 'OCR processing failed';
+      const stack = err?.stack ? err.stack.split('\n').slice(0, 4).join(' | ') : undefined;
+      logger.error(`OCR job ${jobId} failed:`, err, { stack });
       try {
         const updated = await OcrJob.findOneAndUpdate(
           { jobId },
-          { status: 'failed', error },
+          { status: 'failed', error, ...(stack ? { errorStack: stack } : {}) },
           { new: true }
         );
         if (updated) cacheSet(updated);

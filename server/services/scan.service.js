@@ -64,23 +64,63 @@ async function processOneImage(file, { imageIndex, label, provider, variant }) {
   };
 }
 
-/** Process multiple uploaded files concurrently in parallel */
+/**
+ * Process multiple uploaded files. Sequential (not Promise.all) to keep peak
+ * memory bounded on small hosts (Render free tier). A single bad image must not
+ * sink the whole job: per-image failures are recorded as degraded entries and
+ * the remaining images still complete. Only when EVERY image fails do we
+ * reject, with one combined, descriptive error.
+ */
 async function processImages(files, options = {}) {
   if (!files || !files.length) throw ApiError.badRequest('At least one image is required');
   const labels = ['FRONT_PACKAGE', 'BACK_PACKAGE', 'SIDE_IMAGE', 'LABEL_CLOSEUP', 'BARCODE_QR'];
-  
-  const results = await Promise.all(
-    files.map((file, i) =>
-      processOneImage(file, {
-        imageIndex: i,
-        label: options.labels?.[i] || labels[i] || 'FRONT_PACKAGE',
-        provider: options.provider,
-        variant: options.variant,
-      })
-    )
-  );
 
-  return mergeMultiImageOcr(results);
+  const results = [];
+  const failures = [];
+  for (let i = 0; i < files.length; i++) {
+    const file = files[i];
+    const label = options.labels?.[i] || labels[i] || 'FRONT_PACKAGE';
+    try {
+      results.push(
+        await processOneImage(file, {
+          imageIndex: i,
+          label,
+          provider: options.provider,
+          variant: options.variant,
+        })
+      );
+    } catch (err) {
+      const reason = err?.message ? String(err.message) : err?.name || String(err || 'unknown');
+      failures.push({ imageIndex: i, label, reason });
+      results.push({
+        image: { url: null, label, provider: 'error', error: reason },
+        ocrResultId: null,
+        ocr: {
+          provider: 'error',
+          simulated: false,
+          rawText: '',
+          linesCount: 0,
+          meanConfidence: 0,
+          imageMeta: {},
+          processingMs: 0,
+          lines: [],
+        },
+        fields: [],
+        error: reason,
+      });
+    }
+  }
+
+  if (results.every((r) => r.ocr.provider === 'error')) {
+    throw new Error(
+      failures.map((f) => `image ${f.imageIndex + 1} (${f.label}): ${f.reason}`).join('; ') ||
+        'OCR processing failed'
+    );
+  }
+
+  const merged = mergeMultiImageOcr(results.filter((r) => r.ocr.provider !== 'error'));
+  if (failures.length > 0) merged.partialFailures = failures;
+  return merged;
 }
 
 /**
