@@ -79,9 +79,17 @@ export default function Scanner() {
           res = await api.post('/scan/ocr', fd);
           break;
         } catch (err) {
-          if (err?.code !== 'ERR_NETWORK' && err?.code !== 'ECONNABORTED') throw err;
+          // Retry on transient gateway errors too: Render free dynos sleep after
+          // idle and the first request that wakes them often returns 502/503.
+          const transient =
+            err?.code === 'ERR_NETWORK' ||
+            err?.code === 'ECONNABORTED' ||
+            err?.code === 'ERR_BLOCKED_BY_CLIENT' ||
+            err?.response?.status === 502 ||
+            err?.response?.status === 503;
+          if (!transient) throw err;
           if (t === 2) throw err;
-          await new Promise((r) => setTimeout(r, 3000));
+          await new Promise((r) => setTimeout(r, 3000 * (t + 1)));
         }
       }
       const jobId = res?.data?.data?.jobId;

@@ -42,11 +42,22 @@ api.interceptors.response.use(
     return res;
   },
   (err) => {
-    const message =
-      err?.response?.data?.message ||
-      (err.code === 'ERR_NETWORK'
-        ? 'Cannot reach the server. Is the backend running?'
-        : err.message || 'Request failed');
+    let message;
+    if (err?.response?.data?.message) {
+      message = err.response.data.message;
+    } else if (err?.code === 'ERR_BLOCKED_BY_CLIENT') {
+      message =
+        'A browser extension (ad blocker / privacy tool) blocked the request to the server. ' +
+        `Please allowlist ${SERVER_URL} in the extension or open a private window.`;
+    } else if (err?.response?.status === 502 || err?.response?.status === 503) {
+      message =
+        'The server was still starting up (bad gateway). The first request wakes the free ' +
+        'host — please try again in a few seconds.';
+    } else if (err?.code === 'ERR_NETWORK') {
+      message = 'Cannot reach the server. Is the backend running?';
+    } else {
+      message = err?.message || 'Request failed';
+    }
     return Promise.reject(Object.assign(err, { friendlyMessage: message }));
   }
 );
