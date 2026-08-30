@@ -8,6 +8,12 @@ const api = axios.create({
   timeout: 120000,
 });
 
+let sessionExpiredHandler = null;
+
+export function setSessionExpiredHandler(fn) {
+  sessionExpiredHandler = fn;
+}
+
 // Fast in-memory cache for GET requests (10s TTL)
 const clientCache = new Map();
 
@@ -49,6 +55,15 @@ api.interceptors.response.use(
       message =
         'A browser extension (ad blocker / privacy tool) blocked the request to the server. ' +
         `Please allowlist ${SERVER_URL} in the extension or open a private window.`;
+    } else if (err?.response?.status === 401) {
+      const url = err?.config?.url || '';
+      const isAuthCall = /^\/(auth|users)\//.test(url);
+      if (!isAuthCall) {
+        message = 'Your session has expired. Please log in again.';
+        sessionExpiredHandler?.();
+      } else {
+        message = err?.response?.data?.message || 'Invalid credentials';
+      }
     } else if (err?.response?.status === 502 || err?.response?.status === 503) {
       message =
         'The server was still starting up (bad gateway). The first request wakes the free ' +

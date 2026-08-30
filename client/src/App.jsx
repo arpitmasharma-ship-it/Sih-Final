@@ -3,7 +3,8 @@ import { useDispatch, useSelector } from 'react-redux';
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import AppRoutes from './routes/AppRoutes';
-import { loadMe } from './redux/slices/authSlice';
+import { loadMe, sessionExpired } from './redux/slices/authSlice';
+import { setSessionExpiredHandler } from './services/api';
 
 export default function App() {
   const dispatch = useDispatch();
@@ -15,6 +16,12 @@ export default function App() {
 
   useEffect(() => {
     dispatch(loadMe());
+  }, [dispatch]);
+
+  // A 401 anywhere mid-session means the token expired/rotated; reset auth so
+  // the guarded routes bounce the user to /login instead of failing silently.
+  useEffect(() => {
+    setSessionExpiredHandler(() => dispatch(sessionExpired()));
   }, [dispatch]);
 
   return (

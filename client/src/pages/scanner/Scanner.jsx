@@ -108,6 +108,8 @@ export default function Scanner() {
           job = statusRes.data?.data;
           silentNetworkFails = 0;
         } catch (err) {
+          // 401/403 (expired session, forbidden) will not heal by retrying.
+          if (err?.response?.status === 401 || err?.response?.status === 403) throw err;
           // Transient network errors (backend sleeping on Render free tier after
           // idle, or a redeploy in progress) should be retried, not fatal.
           if (silentNetworkFails++ > 25) throw err;

@@ -49,7 +49,14 @@ const authSlice = createSlice({
     error: null,
     booted: false,
   },
-  reducers: {},
+  reducers: {
+    sessionExpired(state) {
+      state.user = null;
+      state.status = 'guest';
+      state.booted = true;
+      state.error = null;
+    },
+  },
   extraReducers: (builder) => {
     builder
       .addCase(loadMe.pending, (state) => {
@@ -92,6 +99,8 @@ const authSlice = createSlice({
 });
 
 export default authSlice.reducer;
+
+export const { sessionExpired } = authSlice.actions;
 
 export const selectUser = (s) => s.auth.user;
 export const selectIsAuthenticated = (s) => s.auth.status === 'authenticated';
