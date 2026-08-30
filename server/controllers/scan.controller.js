@@ -48,7 +48,7 @@ exports.scanOcrStatus = asyncHandler(async (req, res) => {
     imagesCount: job.imagesCount,
     createdAt: job.createdAt,
     ...(job.status === 'completed' ? { data: job.result } : {}),
-    ...(job.status === 'failed' ? { message: job.error } : {}),
+    ...(job.status === 'failed' ? { message: job.error, errorStack: job.errorStack } : {}),
   });
 });
 
