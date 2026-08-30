@@ -32,16 +32,21 @@ async function processImageBuffer(buffer, options = {}) {
   const { imageUrl, imageIndex, variant, onProgress } = options;
   const startedAt = Date.now();
 
-  const { buffer: preparedBuffer, meta: preMeta, preprocessed } =
-    options.skipPreprocess
-      ? { buffer, meta: {}, preprocessed: false }
-      : await preprocessForOcr(buffer);
+  // Accept a pre-processed buffer/image+meta when provided (avoids re-running
+  // preprocessing when the caller already has it, e.g. for reuse on upload).
+  const pre = options.prepared || (options.skipPreprocess
+      ? { buffer, image: null, meta: {}, preprocessed: false }
+      : await preprocessForOcr(buffer));
+  const preparedBuffer = pre.buffer;
+  const preparedImage = pre.image || null;
+  const preMeta = pre.meta || {};
 
   const providerName = options.provider || config.ocr.provider;
   let result;
   try {
     result = await getProvider(providerName).recognize({
       buffer: preparedBuffer,
+      image: preparedImage,
       variant,
       filename: options.filename,
       onProgress,
@@ -88,6 +93,7 @@ async function processImageBuffer(buffer, options = {}) {
       processingMs: Date.now() - startedAt,
     },
     fields,
+    prepared: { buffer: preparedBuffer, image: preparedImage, meta: preMeta },
   };
 }
 

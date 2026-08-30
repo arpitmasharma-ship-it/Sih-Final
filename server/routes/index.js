@@ -44,6 +44,7 @@ router.post(
   multerErrorHandler,
   scanCtrl.scanOcr
 );
+router.get('/scan/ocr/:jobId', authorize('ADMIN', 'INSPECTOR'), scanCtrl.scanOcrStatus);
 router.post(
   '/scan/complete',
   authorize('ADMIN', 'INSPECTOR'),

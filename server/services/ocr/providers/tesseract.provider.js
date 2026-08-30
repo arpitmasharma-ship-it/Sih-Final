@@ -66,9 +66,12 @@ function collectLines(data) {
   return lines;
 }
 
-async function recognize({ buffer, onProgress } = {}) {
+async function recognize({ buffer, image, onProgress } = {}) {
   const worker = await getWorker(onProgress);
-  const { data } = await worker.recognize(buffer, {}, { text: true, blocks: true });
+  // Prefer the raw bitmap from preprocessing when available: feeding
+  // tesseract an ImageLike skips a JPEG encode/decode round-trip entirely.
+  const input = image?.bitmap || buffer;
+  const { data } = await worker.recognize(input, {}, { text: true, blocks: true });
   return {
     provider: 'tesseract',
     simulated: false,

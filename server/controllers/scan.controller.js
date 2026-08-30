@@ -2,6 +2,7 @@ const scanService = require('../services/scan.service');
 const inspectionService = require('../services/inspection.service');
 const notificationService = require('../services/notification.service');
 const ocrService = require('../services/ocr');
+const { createJob, getJob } = require('../services/ocr/ocrJob');
 const ApiError = require('../utils/ApiError');
 const { ok, created } = require('../utils/apiResponse');
 const asyncHandler = require('../utils/asyncHandler');
@@ -9,29 +10,46 @@ const { recordAudit, ACTIONS } = require('../services/audit.service');
 
 /**
  * POST /api/scan/ocr  (multipart images[])
- * Uploads + preprocess + OCR + field extraction.
+ * Enqueues uploads + preprocess + OCR + field extraction as an async job and
+ * returns a jobId immediately. Poll GET /api/scan/ocr/:jobId for completion.
  */
 exports.scanOcr = asyncHandler(async (req, res) => {
   if (!req.files?.length) throw ApiError.badRequest('At least one image file is required under `images`');
   const labels = typeof req.body.labels === 'string' ? JSON.parse(req.body.labels) : undefined;
   const variant = req.body.variant || undefined; // demo scenario when OCR_PROVIDER=demo or fallback
 
-  const startedAt = Date.now();
-  const result = await scanService.processImages(req.files, { labels, variant });
+  const { jobId } = createJob(req.files, { labels, variant });
 
   await recordAudit({
     req,
     action: ACTIONS.OCR_PROCESS,
     entity: 'OcrResult',
     metadata: {
-      images: result.images.length,
-      providers: result.ocrMeta.providers,
-      simulated: result.ocrMeta.simulated,
-      ms: Date.now() - startedAt,
+      images: req.files.length,
+      jobId,
+      async: true,
     },
   });
 
-  ok(res, result);
+  ok(res, { jobId, status: 'pending' });
+});
+
+/**
+ * GET /api/scan/ocr/:jobId
+ * Poll for the status/result of an async OCR job.
+ */
+exports.scanOcrStatus = asyncHandler(async (req, res) => {
+  const job = getJob(req.params.jobId);
+  if (!job) throw ApiError.notFound('OCR job not found or expired');
+  ok(res, {
+    jobId: job.id,
+    status: job.status,
+    progress: job.progress,
+    imagesCount: job.imagesCount,
+    createdAt: job.createdAt,
+    ...(job.status === 'completed' ? { data: job.result } : {}),
+    ...(job.status === 'failed' ? { message: job.error } : {}),
+  });
 });
 
 /**

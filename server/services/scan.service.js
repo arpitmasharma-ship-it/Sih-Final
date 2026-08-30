@@ -1,6 +1,7 @@
 const OcrResult = require('../models/OcrResult');
 const ApiError = require('../utils/ApiError');
 const { processImageBuffer } = require('./ocr');
+const { preprocessForOcr } = require('./ocr/preprocess');
 const { uploadImage } = require('./cloudinary/storage.service');
 const { runComplianceCheck } = require('./compliance/ruleService');
 
@@ -9,19 +10,29 @@ const { runComplianceCheck } = require('./compliance/ruleService');
  * upload -> preprocess -> OCR -> field extraction -> persist OcrResult
  */
 async function processOneImage(file, { imageIndex, label, provider, variant }) {
-  const stored = await uploadImage(file.buffer, {
-    folder: 'lmcc/scans',
-    filename: file.originalname || 'scan.png',
-  });
+  // Preprocess once, up front, so the same compact image is used for BOTH the
+  // upload (fast, small payload) and OCR (avoids a JPEG encode/decode round-trip).
+  const prepared = await preprocessForOcr(file.buffer);
 
-  const { ocr, fields } = await processImageBuffer(file.buffer, {
-    imageUrl: stored.url,
-    imageIndex,
-    filename: file.originalname,
-    provider,
-    variant,
-  });
+  // Execute upload (network) and OCR (CPU) concurrently against the prepared image
+  const [stored, ocrData] = await Promise.all([
+    uploadImage(prepared.buffer, {
+      folder: 'lmcc/scans',
+      filename: file.originalname || 'scan.jpg',
+    }),
+    processImageBuffer(file.buffer, {
+      imageIndex,
+      filename: file.originalname,
+      provider,
+      variant,
+      prepared,
+    }),
+  ]);
 
+  const { ocr, fields } = ocrData;
+  ocr.imageUrl = stored.url;
+
+  // Persist OcrResult document
   const ocrDoc = await OcrResult.create({
     ...ocr,
     imageUrl: stored.url,
@@ -36,7 +47,7 @@ async function processOneImage(file, { imageIndex, label, provider, variant }) {
       provider: ocr.provider,
       simulated: ocr.simulated,
       rawText: ocr.rawText,
-      linesCount: ocr.lines.length,
+      linesCount: ocr.lines?.length || 0,
       meanConfidence: ocr.meanConfidence,
       imageMeta: ocr.imageMeta,
       processingMs: ocr.processingMs,
@@ -46,21 +57,22 @@ async function processOneImage(file, { imageIndex, label, provider, variant }) {
   };
 }
 
-/** Process multiple uploaded files */
+/** Process multiple uploaded files concurrently in parallel */
 async function processImages(files, options = {}) {
   if (!files || !files.length) throw ApiError.badRequest('At least one image is required');
-  const results = [];
-  for (let i = 0; i < files.length; i++) {
-    const labels = ['FRONT_PACKAGE', 'BACK_PACKAGE', 'SIDE_IMAGE', 'LABEL_CLOSEUP', 'BARCODE_QR'];
-    results.push(
-      await processOneImage(files[i], {
+  const labels = ['FRONT_PACKAGE', 'BACK_PACKAGE', 'SIDE_IMAGE', 'LABEL_CLOSEUP', 'BARCODE_QR'];
+  
+  const results = await Promise.all(
+    files.map((file, i) =>
+      processOneImage(file, {
         imageIndex: i,
         label: options.labels?.[i] || labels[i] || 'FRONT_PACKAGE',
         provider: options.provider,
         variant: options.variant,
       })
-    );
-  }
+    )
+  );
+
   return mergeMultiImageOcr(results);
 }
 

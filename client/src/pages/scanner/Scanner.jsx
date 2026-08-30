@@ -70,8 +70,27 @@ export default function Scanner() {
       fd.append('labels', JSON.stringify(images.map((i) => i.label)));
       if (variant) fd.append('variant', variant);
 
+      // Submit as an async job; poll until it completes so the UI is responsive
+      // while OCR + image upload run in the background.
       const res = await api.post('/scan/ocr', fd);
-      const d = res.data.data;
+      const jobId = res.data?.data?.jobId;
+      if (!jobId) throw new Error('No job id returned from server');
+
+      let d = null;
+      for (let attempt = 0; attempt < 600; attempt++) {
+        await new Promise((r) => setTimeout(r, 800));
+        const statusRes = await api.get(`/scan/ocr/${jobId}`);
+        const job = statusRes.data?.data;
+        if (job?.status === 'completed') {
+          d = job.data;
+          break;
+        }
+        if (job?.status === 'failed') {
+          throw new Error(job.message || 'OCR processing failed');
+        }
+      }
+      if (!d) throw new Error('OCR job timed out');
+
       setUploadedImages(d.images || []);
       setOcrPerImage(d.ocrPerImage || []);
       setOcrMeta(d.ocrMeta || null);
