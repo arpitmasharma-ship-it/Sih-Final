@@ -12,6 +12,7 @@
     "test:integration": "cross-env NODE_ENV=test jest --runInBand --testMatch=\"**/tests/**/*.integration.test.js\""
   },
   "dependencies": {
+    "@google/genai": "^2.19.0",
     "axios": "^1.19.0",
     "bcryptjs": "^2.4.3",
     "cloudinary": "^2.4.0",

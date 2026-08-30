@@ -36,9 +36,10 @@ module.exports = {
     enabled: cloudinaryEnabled,
   },
   ocr: {
-    provider: (process.env.OCR_PROVIDER || (isProd ? 'tesseract' : 'demo')).toLowerCase(),
+    provider: (process.env.OCR_PROVIDER || 'gemini').toLowerCase(),
     serviceUrl: process.env.OCR_SERVICE_URL || '',
     apiKey: process.env.OCR_API_KEY || '',
+    geminiApiKey: process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || '',
   },
   smtp: {
     host: process.env.SMTP_HOST || '',

@@ -7,6 +7,7 @@ const connectDB = require('./config/db');
 const config = require('./config/env');
 const logger = require('./utils/logger');
 const { initCloudinary } = require('./config/cloudinary');
+const { warmup: warmupOcr } = require('./services/ocr');
 
 async function main() {
   await connectDB();
@@ -22,6 +23,10 @@ async function main() {
   const server = app.listen(config.port, () => {
     logger.info(`API ready on http://localhost:${config.port} (${config.env})`);
   });
+
+  // Pre-load the OCR worker model in the background so the first real scan
+  // is not a cold start (fast, non-blocking here).
+  warmupOcr();
 
   const shutdown = () => {
     logger.info('Shutting down...');

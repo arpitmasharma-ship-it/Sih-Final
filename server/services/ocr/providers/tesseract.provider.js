@@ -1,16 +1,9 @@
 /**
- * Tesseract.js provider (local, no API key).
- * Uses a bundled `eng.traineddata` when present so the first call does not need
- * to download the model from the tesseract.js CDN — this is important on hosts
- * (like Render free tier) where that runtime download can be slow or blocked.
+ * Tesseract.js provider (local, no API key). First call downloads the
+ * `eng.traineddata` model (needs internet once) then runs offline.
  */
-const path = require('path');
-const fs = require('fs');
 const { createWorker } = require('tesseract.js');
 const logger = require('../../../utils/logger');
-
-const MODEL_DIR = path.join(__dirname, '..', '..', '..');
-const MODEL_PATH = path.join(MODEL_DIR, 'eng.traineddata');
 
 let workerPromise = null;
 
@@ -18,16 +11,11 @@ async function getWorker(onProgress) {
   if (!workerPromise) {
     workerPromise = (async () => {
       try {
-        const options = {
+        const worker = await createWorker('eng', 1, {
           logger: (m) => {
             if (m.status === 'recognizing text' && onProgress) onProgress(m.progress);
           },
-        };
-        // Prefer the bundled model to avoid a first-run CDN download.
-        if (fs.existsSync(MODEL_PATH)) {
-          options.langPath = MODEL_DIR;
-        }
-        const worker = await createWorker('eng', 1, options);
+        });
         return worker;
       } catch (err) {
         workerPromise = null;
@@ -78,12 +66,8 @@ function collectLines(data) {
   return lines;
 }
 
-async function recognize({ buffer, image, onProgress } = {}) {
+async function recognize({ buffer, onProgress } = {}) {
   const worker = await getWorker(onProgress);
-  // Use the preprocessed JPEG buffer. (Passing the raw Jimp bitmap as an
-  // ImageLike is not reliably byte-compatible with tesseract.js and can throw
-  // "truncated file / Error attempting to read image", so we keep it simple and
-  // feed the compact JPEG produced by preprocessing.)
   const { data } = await worker.recognize(buffer, {}, { text: true, blocks: true });
   return {
     provider: 'tesseract',

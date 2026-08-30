@@ -16,7 +16,7 @@ const { recordAudit, ACTIONS } = require('../services/audit.service');
 exports.scanOcr = asyncHandler(async (req, res) => {
   if (!req.files?.length) throw ApiError.badRequest('At least one image file is required under `images`');
   const labels = typeof req.body.labels === 'string' ? JSON.parse(req.body.labels) : undefined;
-  const variant = req.body.variant || undefined; // demo scenario when OCR_PROVIDER=demo or fallback
+  const variant = req.body.variant || undefined; // provided by client, used as OCR hint
 
   const { jobId } = createJob(req.files, { labels, variant });
 

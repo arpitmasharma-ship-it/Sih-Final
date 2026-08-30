@@ -1,11 +1,11 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import {
   UploadCloud, Cpu, Save, ChevronLeft, ChevronRight,
   MapPin, FileText, Loader2,
 } from 'lucide-react';
-import api, { SERVER_URL } from '../../services/api';
+import api from '../../services/api';
 import Card, { CardTitle } from '../../components/ui/Card';
 import Button from '../../components/ui/Button';
 import Input from '../../components/ui/Input';
@@ -13,7 +13,6 @@ import PageHeader from '../../components/ui/PageHeader';
 import { Dropzone } from '../../components/scanner/Dropzone';
 import FieldEditorList from '../../components/scanner/FieldEditorList';
 import CompliancePanel from '../../components/scanner/CompliancePanel';
-import DemoModeBar from '../../components/scanner/DemoModeBar';
 import BboxViewer from '../../components/scanner/BboxViewer';
 import { CATEGORIES, STATES } from '../../constants';
 
@@ -27,10 +26,8 @@ export default function Scanner() {
   const navigate = useNavigate();
   const [stepIdx, setStepIdx] = useState(0);
   const [images, setImages] = useState([]);
-  const [variant, setVariant] = useState(null);
   const [processing, setProcessing] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [ocrProvider, setOcrProvider] = useState(null);
 
   // OCR results
   const [uploadedImages, setUploadedImages] = useState([]); // server-stored copies {url, publicId, label}
@@ -51,14 +48,6 @@ export default function Scanner() {
     inspectorNotes: '',
   });
 
-  // Detect OCR provider on mount
-  useEffect(() => {
-    fetch(`${SERVER_URL}/health`)
-      .then((r) => r.json())
-      .then((d) => setOcrProvider(d.ocrProvider))
-      .catch(() => setOcrProvider('demo'));
-  }, []);
-
   const step = STEPS[stepIdx].key;
 
   const runOcr = async () => {
@@ -68,7 +57,6 @@ export default function Scanner() {
       const fd = new FormData();
       images.forEach((img) => fd.append('images', img.file));
       fd.append('labels', JSON.stringify(images.map((i) => i.label)));
-      if (variant) fd.append('variant', variant);
 
       // Submit as an async job; poll until it completes so the UI is responsive
       // while OCR + image upload run in the background. Retry the submit on
@@ -236,13 +224,6 @@ export default function Scanner() {
 
       {step === 'UPLOAD' && (
         <div className="space-y-4">
-          {ocrProvider === 'demo' && (
-            <DemoModeBar
-              busy={processing}
-              variant={variant}
-              onChange={(v) => setVariant((cur) => (cur === v ? null : v))}
-            />
-          )}
           <Card>
             <CardTitle icon={UploadCloud}>Package photos</CardTitle>
             <Dropzone images={images} setImages={setImages} disabled={processing} />
@@ -361,11 +342,6 @@ export default function Scanner() {
             {ocrPerImage.length > 0 && (
               <Card>
                 <CardTitle>Evidence ({ocrPerImage.length})</CardTitle>
-                {ocrMeta?.simulated && (
-                  <p className="mb-3 rounded-lg bg-violet-50 px-3 py-2 text-[11px] font-semibold text-violet-700 dark:bg-violet-950/40 dark:text-violet-300">
-                    Simulated OCR output — replace OCR_PROVIDER with a real engine for production use.
-                  </p>
-                )}
                 <div className="space-y-3">
                   {ocrPerImage.map((o, i) => (
                     <BboxViewer
